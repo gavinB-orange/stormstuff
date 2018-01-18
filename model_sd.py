@@ -18,19 +18,11 @@ with open(errors_file, "r") as f:
     assert line == header
     line = f.readline()
     counter = 0
-    variances_per_bucket[0] = {}
-    variances_per_bucket[1] = {}
-    variances_per_bucket[2] = {}
-    variances_per_bucket[3] = {}
-    values_per_bucket[0] = {}
-    values_per_bucket[1] = {}
-    values_per_bucket[2] = {}
-    values_per_bucket[3] = {}
-    for m in range(10):
-        counts_per_bucket[0][m+1] = 0
-        counts_per_bucket[1][m+1] = 0
-        counts_per_bucket[2][m+1] = 0
-        counts_per_bucket[3][m+1] = 0
+    for b in range(len(bucket_titles)):
+        variances_per_bucket[b] = {}
+        values_per_bucket[b] = {}
+        for m in range(10):
+            counts_per_bucket[b][m+1] = 0
     while line != '':
         if counter % 1000 == 0:
             print(counter)
