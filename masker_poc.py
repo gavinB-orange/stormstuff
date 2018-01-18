@@ -5,9 +5,8 @@
 # each layer represents the winds per hour
 # increasing layer = next hour
 #
-# TODO: a cell that will be > slimit on next layer should
-# be avoided. Currently I can go to a cell, then find at 
-# the end of a layer cycle that I'm in a storm
+# TODO - need to record in the cells the start and end step
+# so an accurate idea of the path can be got.
 
 import argparse
 import random
@@ -253,18 +252,23 @@ def track_path(path, layers):
         logging.warning("{}: {},{} -> {}".format(lr, x, y, layers[lr][x][y]))
 
 
-def verify_path(path, layers):
+def verify_path(path, layers, maxstep):
     """
     If stalled in position for a while you can get "stranded" on a
     storm point. In that case, the path can have bad wind values.
     Find those, and return the list so those locations can be excluded.
+
+    TODO: If we wait a while on a cell e.g. start before can begin then
+          the layer info is wrong and a path can be wrongly considered to
+          have bad values
+
     """
     count = 0
     bad = []
     for x, y in path:
         lr = int(count / steps_per_layer)
         count += 1
-        if layers[lr][x][y] >= slimit:  # bad case
+        if layers[lr][x][y] >= slimit:  # possible bad case
             logging.warning("Found something bad. {},{} => {}".format(x, y, layers[lr][x][y]))
             bad.append((x, y))
     return bad
@@ -301,7 +305,7 @@ def solve_it(board, layers):
                             logging.warning("FOUND TARGET at {}, {} step {}".format(xy[0], xy[1], step + 1))
                             path = board.report_path(xy[0], xy[1], step + 1)
                             path.append((xy[0], xy[1]))
-                            bad_pos = verify_path(path, layers)
+                            bad_pos = verify_path(path, layers, step + 1)
                             if len(bad_pos) == 0:
                                 track_path(path, layers)
                                 return True
