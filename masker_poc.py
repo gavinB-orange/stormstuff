@@ -186,7 +186,7 @@ class Board(object):
                     continue
                 # ok, nx, ny on board
                 if self.cells[nx][ny] == Board.TARGET and\
-                   self.layers[layer][nx][ny] < slimit:
+                   self.layers[layer][nx][ny] < slimit:  # if the target is stormy, you need to wait
                     return (nx, ny)
                 if self.cells[nx][ny] != Board.BAD and self.cells[nx][ny] != Board.TARGET :
                     if self.cells[nx][ny] < 0:  # i.e. is untouched
