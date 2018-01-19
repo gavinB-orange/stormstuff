@@ -99,7 +99,7 @@ class Board(object):
                     # ok, nx, ny on board
                     if self.cells[nx][ny].has_value(Board.TARGET) and \
                        self.layers[layer][nx][ny] < slimit:  # if the target is stormy, you need to wait
-                        return (nx, ny)
+                        return next, (nx, ny)
                     if self.cells[nx][ny].value_is_not(Board.BAD) and self.cells[nx][ny].value_is_not(Board.TARGET):
                         if self.cells[nx][ny].get_value() < 0:  # i.e. is untouched
                             if self.layers[layer][nx][ny] < slimit:
@@ -107,7 +107,7 @@ class Board(object):
                                 self.cells[nx][ny].set_parent(x, y)
                                 self.cells[nx][ny].add_step(current)
                                 next.append((nx, ny))
-        return None
+        return next, None
 
     def report_path(self, cell):
         if cell.has_value(Board.START):
@@ -117,6 +117,15 @@ class Board(object):
             parent = cell.get_parent()
             path = self.report_path(self.cells[parent[0], parent[1]])
             path.append(cell)
+
+    def solver(self):
+        step = 1
+        found = None
+        while found is None:
+            layer = int(step / steps_per_layer)
+            next, found = self.take_step(step, layer)
+            self.pass_store.append(next)
+
 
 def get_test_data():
     xsize = 10
