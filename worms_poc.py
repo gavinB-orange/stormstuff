@@ -18,10 +18,10 @@ class Cell(object):
         self.steps = []
 
     def __str__(self):
-        return "Value = {}, parent = {}, steps = {}".format(self.value, self.parent, self.steps)
+        return "| Value = {}, parent = {}, steps = {}|".format(self.value, self.parent, self.steps)
 
     def __repr__(self):
-        return "Value = {}, parent = {}, steps = {}".format(self.value, self.parent, self.steps)
+        return self.__str__()
 
     def get_value(self):
         return self.value
@@ -36,7 +36,8 @@ class Cell(object):
         return self.value != v
 
     def set_parent(self, x, y):
-        self.parent = (x, y)
+        if self.parent is None:  # parent only set first time
+            self.parent = (x, y)
 
     def get_parent(self):
         return self.parent
@@ -57,16 +58,16 @@ class Board(object):
 
     def __init__(self, xsize, ysize, cities, layers):
         self.pass_count = 0
-        start = cities[0]
-        finish = cities[1]
-        self.pass_store = [[start]]  # record initial pos
+        self.start = cities[0]
+        self.finish = cities[1]
+        self.pass_store = [[self.start]]  # record initial pos
         self.xsize = xsize
         self.ysize = ysize
         self.cells = [[Cell(Board.CLEAR) for x in range(xsize)] for y in range(ysize)]
-        logging.warning("Start is {}".format(start))
-        logging.warning("Finish is {}".format(finish))
-        self.cells[start[0]][start[1]].set_value(Board.START)
-        self.cells[finish[0]][finish[1]].set_value(Board.TARGET)
+        logging.warning("Start is {}".format(self.start))
+        logging.warning("Finish is {}".format(self.finish))
+        self.cells[self.start[0]][self.start[1]].set_value(Board.START)
+        self.cells[self.finish[0]][self.finish[1]].set_value(Board.TARGET)
         self.layers = layers
 
     def get_xsize(self):
@@ -84,10 +85,14 @@ class Board(object):
         Take a step from x, y using current marker
         """
         live = self.pass_store[-1]  # get edges
+        print(live)
         next = []
         for x, y in live:
             if self.layers[layer][x][y] >= slimit:  # starting badly
-                return live, None  # just wait around until next hour
+                if self.start[0] == x and self.start[1] == y:  #starting badly
+                    return live, None
+                else:  # we are in the mode where we are on a location that has become stormy
+                    continue  # just skip this location
             for dx in [-1, 0, 1]:
                 for dy in [-1, 0, 1]:
                     if abs(dx) == abs(dy):  # no diags
@@ -100,11 +105,15 @@ class Board(object):
                        ny >= self.ysize:
                         continue
                     # ok, nx, ny on board
-                    if self.cells[nx][ny].has_value(Board.TARGET) and \
-                       self.layers[layer][nx][ny] < slimit:  # if the target is stormy, you need to wait
-                        self.cells[nx][ny].set_parent(x, y)
-                        self.cells[nx][ny].add_step(current)
-                        return next, (nx, ny)
+                    if self.cells[nx][ny].has_value(Board.TARGET):
+                        logging.info("target seen")
+                        if self.layers[layer][nx][ny] < slimit:  # if the target is stormy, you need to wait
+                            self.cells[nx][ny].set_parent(x, y)
+                            self.cells[nx][ny].add_step(current)
+                            next.append((nx, ny))
+                            return next, (nx, ny)
+                        else:  # target is stormy - wait in current position
+                            return live, None
                     if self.cells[nx][ny].value_is_not(Board.BAD) and self.cells[nx][ny].value_is_not(Board.TARGET):
                         if self.cells[nx][ny].get_value() < 0:  # i.e. is untouched
                             logging.info("{},{} is empty location".format(nx, ny))
@@ -118,13 +127,28 @@ class Board(object):
         return next, None
 
     def solver(self):
+        if self.start == self.finish:  # trivial case
+            return self.start[0], self.start[1]
         step = 1
         found = None
         while found is None:
+            logging.info("step > {}".format(step))
+            if step > self.xsize * self.ysize:
+                for l in self.layers:
+                    print("****************************************")
+                    for ll in l:
+                        print(ll)
+                    print("****************************************")
+                print("########################################")
+                for r in self.cells:
+                    print(r)
+                print("########################################")
+                raise Exception("no solution")
             layer = int(step / steps_per_layer)
             next_thing, found = self.take_step(step, layer)
             step += 1
             self.pass_store.append(next_thing)
+            print(self.pass_store)
         return found
 
     def show_path(self, txy):
@@ -133,6 +157,7 @@ class Board(object):
         :return: 
         """
         target = self.cells[txy[0]][txy[1]]
+        logging.info("      start of show_path. target {},{} => {}".format(txy[0], txy[1], target))
         # OK - how did I get here?
         if target.get_parent() is not None:
             self.show_path(target.get_parent())
