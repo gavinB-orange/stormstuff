@@ -87,7 +87,7 @@ class Board(object):
         next = []
         for x, y in live:
             if self.layers[layer][x][y] >= slimit:  # starting badly
-                return None  # just wait around until next hour
+                return live, None  # just wait around until next hour
             for dx in [-1, 0, 1]:
                 for dy in [-1, 0, 1]:
                     if abs(dx) == abs(dy):  # no diags
@@ -103,6 +103,7 @@ class Board(object):
                     if self.cells[nx][ny].has_value(Board.TARGET) and \
                        self.layers[layer][nx][ny] < slimit:  # if the target is stormy, you need to wait
                         self.cells[nx][ny].set_parent(x, y)
+                        self.cells[nx][ny].add_step(current)
                         return next, (nx, ny)
                     if self.cells[nx][ny].value_is_not(Board.BAD) and self.cells[nx][ny].value_is_not(Board.TARGET):
                         if self.cells[nx][ny].get_value() < 0:  # i.e. is untouched
@@ -116,7 +117,7 @@ class Board(object):
                                 next.append((nx, ny))
         return next, None
 
-    def report_path(self, cell):
+    def report_pathXXXX(self, cell):
         if cell.has_value(Board.START):
             print("Start cell = {}".format(cell))
             return cell
@@ -130,8 +131,9 @@ class Board(object):
         found = None
         while found is None:
             layer = int(step / steps_per_layer)
-            next, found = self.take_step(step, layer)
-            self.pass_store.append(next)
+            next_thing, found = self.take_step(step, layer)
+            step += 1
+            self.pass_store.append(next_thing)
         return found
 
     def show_path(self, txy):
@@ -140,11 +142,11 @@ class Board(object):
         :return: 
         """
         target = self.cells[txy[0]][txy[1]]
-        logging.info("Target {}, {} => {}".format(txy[0], txy[1], target))
         # OK - how did I get here?
         if target.get_parent() is not None:
             self.show_path(target.get_parent())
-        print(target)
+        #print(target)
+        logging.info("Target {}, {} => {}".format(txy[0], txy[1], target))
 
 
 
