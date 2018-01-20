@@ -117,15 +117,6 @@ class Board(object):
                                 next.append((nx, ny))
         return next, None
 
-    def report_pathXXXX(self, cell):
-        if cell.has_value(Board.START):
-            print("Start cell = {}".format(cell))
-            return cell
-        else:
-            parent = cell.get_parent()
-            path = self.report_path(self.cells[parent[0], parent[1]])
-            path.append(cell)
-
     def solver(self):
         step = 1
         found = None
@@ -146,7 +137,7 @@ class Board(object):
         if target.get_parent() is not None:
             self.show_path(target.get_parent())
         #print(target)
-        logging.info("Target {}, {} => {}".format(txy[0], txy[1], target))
+        logging.warning("Target {}, {} => {}".format(txy[0], txy[1], target))
 
 
 
