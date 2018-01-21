@@ -5,10 +5,10 @@
 #      per model data.
 #    * Using the variance, estimate a wind value per location by the following formula :
 #          new cell value at location = sum_over_all_models(vn*rn)/sum(vn)
-#      where vn is variance of model n and rn is wind value for model n at that location
-#      that gives a new predicted value for each location based on models and their perceived accuracy.
-#    * Use this new set of data to do a second similar pass, but this time, rather than use the global model variance,
-#      use the variance per bucket, where buckets are defined wind values between
+#      where vn is variance of model n and rn is wind value for model n at that location.
+#      That gives a new predicted value for each location based on models and their perceived accuracy.
+#    * Use this new data point to calculate a value as before, but this time, rather than use the
+#      global model variance, use the variance per bucket, where buckets are defined wind values between
 #      0...5-, 5..10-, 10..15-, 15..20-,20..25-, 25+
 #      for the value calculated above.
 #    * This gives a new updated value per cell.
@@ -38,8 +38,15 @@ class CacherOne(object):
     start a new
     """
 
-    def __init__(self, sds, args):
+    def __init__(self, sds, bsds, args):
+        """
+        Init
+        :param sds:  Per model SD
+        :param bsds: Per bucket per model SD
+        :param args: General args
+        """
         self.sds = sds
+        self.bsds = bsds
         self.variances = [x * x for x in self.sds]
         self.vsum = sum(self.variances)
         self.args = args
@@ -53,10 +60,20 @@ class CacherOne(object):
         that data using the magic formula
         :return:
         """
-        value = 0
+        initial_value = 0.0
         for i in range(len(self.model_data)):
-            value += self.model_data[i] * self.variances[i]
-        value /= self.vsum
+            initial_value += self.model_data[i] * self.variances[i]
+        initial_value /= self.vsum
+        # get the bucket based on this initial value
+        bucket = int(initial_value / 5)
+        if bucket > 5: bucket = 5
+        value = 0.0
+        sumit = 0
+        for i in range(len(self.model_data)):
+            var = self.bsds[i][bucket]  * self.bsds[i][bucket]
+            value += self.model_data[i] * var
+            sumit += var
+        value /= sumit
         return value
 
     def add_line(self, line):
@@ -129,32 +146,34 @@ class WeighingMachine(object):
         :return:
         """
         # suck in the model sd info
-        model_data = {}
+        sd_per_model = {}
         with open(self.args.sdfile, "r") as f:
             line = f.readline()
-            assert line=="model,sd\n", "Malformed sd file"
+            assert line=="model,sd\n", "Malformed sd file : {}".format(self.args.sdfile)
             line = f.readline()
             while line != '':
                 model, data = line[:-1].split(',')
-                model_data[model] = data
-#        # model_bucket_data
-#        model_bucket_data = {}
-#        for i in range(1, 1 + Nmodels):
-#            model_bucket_data[i] = []
-#        with open(self.args.sdbucketfile, "r") as f:
-#            line = f.readline()
-#            assert line=="model,b0,b1,b2,b3,b4,b5\n"
-#            line = f.readline()
-#            while line != '':
-#                model, b0, b1, b2, b3, b4, b5 = line[:-1].split(',')
-#                model_data[model] = [b0, b1, b2, b3, b4, b5]
+                sd_per_model[int(model)] = float(data)
+                line = f.readline()
+        # sd_per_bucket_per_model
+        sd_per_bucket_per_model = {}
+        for i in range(1, 1 + Nmodels):
+            sd_per_bucket_per_model[i] = []
+        with open(self.args.sdbucketfile, "r") as f:
+            line = f.readline()
+            assert line=="model,b0,b1,b2,b3,b4,b5\n"
+            line = f.readline()
+            while line != '':
+                model, b0, b1, b2, b3, b4, b5 = line[:-1].split(',')
+                sd_per_bucket_per_model[int(model)] = [float(b0), float(b1), float(b2), float(b3), float(b4), float(b5)]
+               line = f.readline()
         # OK - now we have the values
-        cacher = CacherOne(model_data, self.args)
+        cacher = CacherOne(sd_per_model, sd_per_bucket_per_model, self.args)
         counter = 0
         with open(self.args.combined, "w") as out:
             with open(self.args.model_file, "r") as inp:
                 line = inp.readline()
-                assert line == "xid,yid,date_id,hour,model,wind", "line is : " + line
+                assert line == "xid,yid,date_id,hour,model,wind\n", "line is : " + line
                 out.write(WeighingMachine.NEWHEADER)
                 line = inp.readline()
                 while line != '':
@@ -180,6 +199,7 @@ def main():
                         help="File name for file containing the insitu data.")
     parser.add_argument("-c", "--combined", default='combined.csv',
                         help="File name for file containing the new predicted data based on combining model info")
+    parser.add_argument("-O", action="store_false", help="skip step 1")
 
     args = parser.parse_args()
     nl = getattr(logging, args.log.upper(), None)
@@ -188,7 +208,8 @@ def main():
     logging.basicConfig(level=nl,
                         format='%(message)s')
     wm = WeighingMachine(args)
-    wm.get_first_wind_estimate()
+    if args.O:
+        wm.get_first_wind_estimate()
 
 
 if __name__ == '__main__':
