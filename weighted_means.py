@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 #
 # This program does the following
-#    * Take the standard deviations per model and per model/per value bucket, and the
+#    1.1 Take the standard deviations per model and per model/per value bucket, and the
 #      per model data.
-#    * Using the variance, estimate a wind value per location by the following formula :
+#    1.2 Using the variance, estimate a wind value per location by the following formula :
 #          new cell value at location = sum_over_all_models(vn*rn)/sum(vn)
-#      where vn is variance of model n and rn is wind value for model n at that location.
-#      That gives a new predicted value for each location based on models and their perceived accuracy.
-#    * Use this new data point to calculate a value as before, but this time, rather than use the
-#      global model variance, use the variance per bucket, where buckets are defined wind values between
-#      0...5-, 5..10-, 10..15-, 15..20-,20..25-, 25+
-#      for the value calculated above.
-#    * This gives a new updated value per cell.
+#        where vn is variance of model n and rn is wind value for model n at that location.
+#        That gives a new predicted value for each location based on models and their perceived accuracy.
+#    1.3 Use this new data point to calculate a value as before, but this time, rather than use the
+#        global model variance, use the variance per bucket, where buckets are defined wind values between
+#        0...5-, 5..10-, 10..15-, 15..20-,20..25-, 25+
+#        for the value calculated above.
+#    1.4 This gives a new updated value per cell.
 #    * Calculate the standard deviation of this new data set versus the in-situ real data.
 #    * Using these new data sets, bucketize the predicted wind value down to one decimal place, and show which of the
 #      buckets correspond to a case where the real value was >= 15. Express as a % of the total number of items in that
@@ -47,7 +47,9 @@ class CacherOne(object):
         """
         self.sds = sds
         self.bsds = bsds
-        self.variances = [x * x for x in self.sds]
+        self.variances = {}
+        for m in sorted(self.sds.keys()):
+            self.variances[m] = self.sds[m] * self.sds[m]
         self.vsum = sum(self.variances)
         self.args = args
         self.model_data = [0 for x in range(Nmodels)]  # zero'd array
@@ -62,7 +64,7 @@ class CacherOne(object):
         """
         initial_value = 0.0
         for i in range(len(self.model_data)):
-            initial_value += self.model_data[i] * self.variances[i]
+            initial_value += self.model_data[i] * self.variances[i + 1]  # remember variances start at 1 not 0
         initial_value /= self.vsum
         # get the bucket based on this initial value
         bucket = int(initial_value / 5)
@@ -70,7 +72,7 @@ class CacherOne(object):
         value = 0.0
         sumit = 0
         for i in range(len(self.model_data)):
-            var = self.bsds[i][bucket]  * self.bsds[i][bucket]
+            var = self.bsds[i + 1][bucket]  * self.bsds[i + 1][bucket]
             value += self.model_data[i] * var
             sumit += var
         value /= sumit
@@ -166,7 +168,7 @@ class WeighingMachine(object):
             while line != '':
                 model, b0, b1, b2, b3, b4, b5 = line[:-1].split(',')
                 sd_per_bucket_per_model[int(model)] = [float(b0), float(b1), float(b2), float(b3), float(b4), float(b5)]
-               line = f.readline()
+                line = f.readline()
         # OK - now we have the values
         cacher = CacherOne(sd_per_model, sd_per_bucket_per_model, self.args)
         counter = 0
