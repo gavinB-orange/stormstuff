@@ -23,8 +23,11 @@
 
 import argparse
 import logging
+import math
 
 Nmodels = 10  # but they start at 1
+Nbuckets = 6
+BucketWidth = 5
 
 
 class CacherOne(object):
@@ -67,8 +70,8 @@ class CacherOne(object):
             initial_value += self.model_data[i] * self.variances[i + 1]  # remember variances start at 1 not 0
         initial_value /= self.vsum
         # get the bucket based on this initial value
-        bucket = int(initial_value / 5)
-        if bucket > 5: bucket = 5
+        bucket = int(initial_value / BucketWidth)
+        if bucket >= Nbuckets: bucket = Nbuckets - 1
         value = 0.0
         sumit = 0
         for i in range(len(self.model_data)):
@@ -128,8 +131,8 @@ class WeighingMachine(object):
     b4 : 20..25-
     b5 : 25+
     """
-
-    NEWHEADER = "xid,yid,date_id,hour,wind\n"
+    COMBINEDHEADER = "xid,yid,date_id,hour,wind\n"
+    INSITUHEADER = "xid,yid,date_id,hour,wind\n"
 
     def __init__(self, args):
         """
@@ -176,7 +179,7 @@ class WeighingMachine(object):
             with open(self.args.model_file, "r") as inp:
                 line = inp.readline()
                 assert line == "xid,yid,date_id,hour,model,wind\n", "line is : " + line
-                out.write(WeighingMachine.NEWHEADER)
+                out.write(WeighingMachine.COMBINEDHEADER)
                 line = inp.readline()
                 while line != '':
                     if counter % 1000 == 0: print(counter)
@@ -186,6 +189,56 @@ class WeighingMachine(object):
                         out.write(result)
                     line = inp.readline()
                 out.write(cacher.add_line(None))
+
+    def calc_sd(self):
+        logging.warning("Calculating SD of combined data set")
+        # global and bucketized
+        sum_err_2 = 0
+        count = 0
+        bucket_err_2 = [0 for n in range(Nbuckets)]  # zero'ed list
+        bucket_count = [0 for n in range(Nbuckets)]
+        with open(self.args.combined, "r") as combined:
+            with open(self.args.insitu, "r") as insitu :
+                cline = combined.readline()
+                assert cline == WeighingMachine.COMBINEDHEADER, "unexpected content in {}".format(self.args.combined)
+                iline = insitu.readline()
+                assert iline == WeighingMachine.INSITUHEADER, "unexpected content in {}".format(self.args.insitu)
+                cline = combined.readline()
+                iline = insitu.readline()
+                while cline != '' and iline != '':
+                    if count % 1000: print(count)
+                    cx, cy, cdate, chour, cwind = cline[:-1].split(',')
+                    ix, iy, idate, ihour, iwind = iline[:-1].split(',')
+                    assert cx == ix and\
+                           cy == iy and\
+                           cdate == idate and\
+                           chour == ihour, "in-situ and combined files do not line up!"
+                    cval = float(cwind)
+                    ival = float(iwind)
+                    err = cval - ival
+                    sum_err_2 += err * err
+                    count += 1
+                    bucket = int(float(cwind) / BucketWidth)
+                    if bucket >= Nbuckets:
+                        bucket = Nbuckets - 1
+                    bucket_err_2[bucket] += err * err
+                    bucket_count[bucket] += 1
+        var_global = sum_err_2 / count
+        sd_global = math.sqrt(var_global)
+        var_buckets = [0 for n in range(Nbuckets)]
+        sd_buckets = [0 for n in range(Nbuckets)]
+        for i in range(Nbuckets):
+            var_buckets[i] = bucket_err_2[i] / bucket_count[i]
+            sd_buckets[i] = math.sqrt(var_buckets[i])
+        logging.warning("Results written to {}".format(self.args.results))
+        with open(self.args.results, "w") as res:
+            gline = "Global variance = {}, sd = {}\n".format(var_global, sd_global)
+            res.write(gline)
+            print(gline)
+            for i in range(Nbuckets):
+                iline = "Bucket {}, var = {}, sd = {}\n".format(i, var_buckets[i], sd_buckets[i])
+                res.write(iline)
+                print(iline)
 
 
 def main():
@@ -197,10 +250,12 @@ def main():
                         help="File name for file containing the sd info per bucket per model.")
     parser.add_argument("-m", "--model_file", default='ForecastDataforTraining_201712.csv',
                          help="File name for file containing the sd info per model.")
-    parser.add_argument("-i", "--insitu_data", default='In_situMeasurementforTraining_201712.csv',
+    parser.add_argument("-i", "--insitu", default='In_situMeasurementforTraining_201712.csv',
                         help="File name for file containing the insitu data.")
     parser.add_argument("-c", "--combined", default='combined.csv',
                         help="File name for file containing the new predicted data based on combining model info")
+    parser.add_argument("-r", "--results", default='results.txt',
+                        help="File name for file containing the SD of the new predicted data vs in-situ")
     parser.add_argument("-O", action="store_false", help="skip step 1")
 
     args = parser.parse_args()
@@ -212,6 +267,7 @@ def main():
     wm = WeighingMachine(args)
     if args.O:
         wm.get_first_wind_estimate()
+    wm.calc_sd()
 
 
 if __name__ == '__main__':
