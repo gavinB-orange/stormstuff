@@ -223,6 +223,8 @@ class WeighingMachine(object):
                         bucket = Nbuckets - 1
                     bucket_err_2[bucket] += err * err
                     bucket_count[bucket] += 1
+                    cline = combined.readline()
+                    iline = insitu.readline()
         var_global = sum_err_2 / count
         sd_global = math.sqrt(var_global)
         var_buckets = [0 for n in range(Nbuckets)]
