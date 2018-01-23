@@ -13,6 +13,7 @@ steps_per_layer = 4
 EXPECTEDHDR = "xid,yid,date_id,hour,wind\n"
 message_count = 10000  # every message_count iterations, output a message
 
+
 class Cell(object):
 
     def __init__(self, value):
@@ -89,13 +90,17 @@ class Board(object):
         """
         live = self.pass_store[-1]  # get edges
         print(live)
-        next = []
+        next_thing = []
         for x, y in live:
-            if self.layers[layer][x][y] >= slimit:  # starting badly
-                if self.start[0] == x and self.start[1] == y:  #starting badly
-                    return live, None
-                else:  # we are in the mode where we are on a location that has become stormy
-                    continue  # just skip this location
+            try:
+                if self.layers[layer][x][y] >= slimit:  # starting badly
+                    if self.start[0] == x and self.start[1] == y:  # starting badly
+                        return live, None
+                    else:  # we are in the mode where we are on a location that has become stormy
+                        continue  # just skip this location
+            except IndexError:
+                logging.critical("Current = {}, layer = {}, x = {}, y = {}, len(self.layers) = {}".format(current, layer, x, y, len(self.layers)))
+                raise
             for dx in [-1, 0, 1]:
                 for dy in [-1, 0, 1]:
                     if abs(dx) == abs(dy):  # no diags
@@ -113,8 +118,8 @@ class Board(object):
                         if self.layers[layer][nx][ny] < slimit:  # if the target is stormy, you need to wait
                             self.cells[nx][ny].set_parent(x, y)
                             self.cells[nx][ny].add_step(current)
-                            next.append((nx, ny))
-                            return next, (nx, ny)
+                            next_thing.append((nx, ny))
+                            return next_thing, (nx, ny)
                         else:  # target is stormy - wait in current position
                             return live, None
                     if self.cells[nx][ny].value_is_not(Board.BAD) and self.cells[nx][ny].value_is_not(Board.TARGET):
@@ -124,10 +129,11 @@ class Board(object):
                                 logging.info("   and is under storm limit - marking")
                                 self.cells[nx][ny].set_value(current)
                                 self.cells[nx][ny].set_parent(x, y)
-                                logging.info("Cell at {},{} has parent set to {}".format(nx, ny, self.cells[nx][ny].get_parent()))
+                                logging.info("Cell at {},{} has parent set to {}".format(nx, ny,
+                                                                                         self.cells[nx][ny].get_parent()))
                                 self.cells[nx][ny].add_step(current)
-                                next.append((nx, ny))
-        return next, None
+                                next_thing.append((nx, ny))
+        return next_thing, None
 
     def solver(self):
         if self.start == self.finish:  # trivial case
@@ -136,7 +142,7 @@ class Board(object):
         found = None
         while found is None:
             logging.info("step > {}".format(step))
-            if step > self.xsize * self.ysize:
+            if step >= steps_per_layer * len(self.layers):
                 for l in self.layers:
                     print("****************************************")
                     for ll in l:
@@ -164,9 +170,8 @@ class Board(object):
         # OK - how did I get here?
         if target.get_parent() is not None:
             self.show_path(target.get_parent())
-        #print(target)
+        # print(target)
         logging.warning("Target {}, {} => {}".format(txy[0], txy[1], target))
-
 
 
 def get_test_data():
@@ -378,8 +383,8 @@ def main():
     logging.basicConfig(level=nl,
                         format='%(message)s')
     if args.xsize < 0 or \
-                    args.ysize < 0 or \
-                    args.nlayers < 0:
+       args.ysize < 0 or \
+       args.nlayers < 0:
         logging.critical("Malformed x, y or h values")
         sys.exit(22)
     if args.file is None:
@@ -388,8 +393,9 @@ def main():
     else:
         cities = read_cities(args.cities)
         layers, xsize, ysize = get_file_data(args.file)
-    show_layers(layers)
-    board = Board(xsize, ysize, cities,layers)
+    if args.file is None:  # if using a file, too much data typically to display
+        show_layers(layers)
+    board = Board(xsize, ysize, cities, layers)
     # place cities
     res = board.solver()
     if res is not None:
