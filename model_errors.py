@@ -7,6 +7,7 @@ mfile = "ForecastDataforTraining_201712.csv"
 rfile = "In_situMeasurementforTraining_201712.csv"
 ofile = "ModelErrorFile.csv"
 
+message_count = 10000  # every message_count iterations, output a message
 
 with open(ofile, "w") as o:
     with open(rfile, "r") as r:
@@ -22,7 +23,7 @@ with open(ofile, "w") as o:
             rline = r.readline()
             counter = 0
             while rline != '':
-                if counter % 1000 == 0:
+                if counter % message_count == 0:
                     print(counter)
                 counter += 1
                 xid, yid, date_id, hour, wind = rline[:-1].split(',')

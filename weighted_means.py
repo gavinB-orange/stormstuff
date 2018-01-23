@@ -28,6 +28,7 @@ import math
 Nmodels = 10  # but they start at 1
 Nbuckets = 6
 BucketWidth = 5
+message_count = 10000  # every message_count iterations, output a message
 
 
 class CacherOne(object):
@@ -182,7 +183,7 @@ class WeighingMachine(object):
                 out.write(WeighingMachine.COMBINEDHEADER)
                 line = inp.readline()
                 while line != '':
-                    if counter % 1000 == 0: print(counter)
+                    if counter % message_count == 0: print(counter)
                     counter += 1
                     result = cacher.add_line(line)
                     if result is not None:
@@ -206,7 +207,7 @@ class WeighingMachine(object):
                 cline = combined.readline()
                 iline = insitu.readline()
                 while cline != '' and iline != '':
-                    if count % 1000: print(count)
+                    if count % message_count: print(count)
                     cx, cy, cdate, chour, cwind = cline[:-1].split(',')
                     ix, iy, idate, ihour, iwind = iline[:-1].split(',')
                     assert cx == ix and\

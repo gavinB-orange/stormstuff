@@ -8,6 +8,7 @@ sd_file = "sd_file.csv"
 sd_bucket_file = "sd_bucket_file.csv"
 
 Nmodels = 10
+message_count = 10000  # every message_count iterations, output a message
 values = {}
 variances = {}
 values_per_bucket = {}
@@ -28,7 +29,7 @@ with open(errors_file, "r") as f:
         for m in range(Nmodels):
             counts_per_bucket[b][m+1] = 0
     while line != '':
-        if counter % 1000 == 0:
+        if counter % message_count == 0:
             print(counter)
         counter += 1
         xid, yid, date_id, hour, model, wind, err = line[:-1].split(',')

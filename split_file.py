@@ -8,6 +8,7 @@ import argparse
 FILENAME = "ForecastDataforTraining_201712.csv"
 OUTPUT = "processed_data_for_training"
 NEWHEADER = "xid,yid,date_id,hour,model,wind\n"
+message_count = 10000  # every message_count iterations, output a message
 
 day_files = {}
 
@@ -24,7 +25,7 @@ def main():
         assert line == "xid,yid,date_id,hour,model,wind\n", "line is : " + line
         line = fin.readline()
         while line != '':
-            if counter % 1000 == 0:
+            if counter % message_count == 0:
                 print(counter)
             counter += 1
             xid_r, yid_r, date_id_r, hour_r, model_r, wind_r = line.split(',')
