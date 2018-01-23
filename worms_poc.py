@@ -10,6 +10,9 @@ slimit = 15
 
 steps_per_layer = 4
 
+EXPECTEDHDR = "xid,yid,date_id,hour,wind\n"
+message_count = 10000  # every message_count iterations, output a message
+
 class Cell(object):
 
     def __init__(self, value):
@@ -272,6 +275,90 @@ def show_layers(lys):
     logging.info("================================")
 
 
+def read_cities(cfile):
+    cities = []
+    with open(cfile, "r") as f:
+        line = f.readline()
+        assert line == "cid,xid,yid\n", "Malformed city file header"
+        line = f.readline()
+        while line != '':
+            cid, xid, yid = line[:-1].split(',')
+            cities.append((int(xid) - 1, int(yid) - 1))  # -1 as want 0..xsize-1
+            line = f.readline()
+    return cities
+
+
+def scan_file_for_dimensions(fn):
+    mx = 0
+    my = 0
+    mxh = 0
+    minh = 24  # hour cannot be beyond end of day
+    count = 0
+    logging.warning("Scanning input file for size information ...")
+    with open(fn, "r") as f:
+        line = f.readline()
+        assert line == EXPECTEDHDR, "Malformed file - header does not match expectations"
+        line = f.readline()
+        while line != '':
+            if count % message_count == 0:
+                print(count)
+            count += 1
+            # note dropping of final \n
+            xid_r, yid_r, date_r, hour_r, wind_r = line[:-1].split(',')
+            xid, yid, hid = int(xid_r), int(yid_r), int(hour_r)
+            if xid > mx:
+                mx = xid
+            if yid > my:
+                my = yid
+            if hid > mxh:
+                mxh = hid
+            if hid < minh:
+                minh = hid
+            line = f.readline()
+        return mx, my, minh, mxh
+
+
+def get_file_data(filename):
+    """
+    Scan the file for the dimensions, then create an empty structure and fill with the
+    available data.
+    :param filename: File with the data in it
+    :return:  layers, xsize, ysize
+    """
+    xsize, ysize, minh, maxh = scan_file_for_dimensions(filename)
+    nlayers = maxh - minh + 1
+    date_value = -1  # defensive check to ensure we always read the same day
+    logging.info("xsize = {}, ysize = {}, nlayers = {}".format(xsize, ysize, nlayers))
+    count = 0
+    with open(filename, "r") as f:
+        line = f.readline()
+        assert line == EXPECTEDHDR, "Malformed file - header does not match expectations"
+        line = f.readline()
+        logging.warning("Creating empty data structure ...")
+        layers = [[[0 for y in range(ysize)] for x in range(xsize)] for h in range(nlayers)]  # create empty layer structure
+        logging.warning("Starting to read file data")
+        while line != '':
+            if count % message_count == 0:
+                print(count)
+            count += 1
+            xid_r, yid_r, date_id_r, hour_r, wind_r = line[:-1].split(',')
+            # note -1 to x, y so arrays can start from 0
+            xid, yid, date_id, hour, wind = int(xid_r) - 1, int(yid_r) - 1, int(date_id_r), int(hour_r), float(wind_r)
+            assert 0 <= xid <= xsize, "xid out of range!"
+            assert 0 <= yid <= ysize, "yid out of range!"
+            if date_value < 0:
+                date_value = date_id
+            else:
+                assert date_value == date_id, "Date for more than one day!"
+            try:
+                layers[hour - minh][xid][yid] = wind
+            except IndexError:
+                logging.critical("hour = {} - {} = {}, xid = {}, yid = {}".format(hour, minh, (hour-minh), xid, yid))
+                raise
+            line = f.readline()
+    return layers, xsize, ysize
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-x", "--xsize", default=10, type=int, help="xsize of generated test data")
@@ -279,6 +366,10 @@ def main():
     parser.add_argument("-H", "--nlayers", default=10, type=int, help="number of layers/hours")
     parser.add_argument("-a", "--wind_average", default=10, type=int, help="mean wind value.")
     parser.add_argument("-d", "--wind_sd", default=2, type=int, help="standard deviation of wind")
+    parser.add_argument("-f", "--file", default=None,
+                        help="Data file. Note this option supercedes the other options.")
+    parser.add_argument("-c", "--cities", default="CityData.csv",
+                        help="City data file. Note this option only works in conjunction with -f.")
     parser.add_argument("-l", "--log", default='WARNING', help="Logging level to use.")
     args = parser.parse_args()
     nl = getattr(logging, args.log.upper(), None)
@@ -291,8 +382,12 @@ def main():
                     args.nlayers < 0:
         logging.critical("Malformed x, y or h values")
         sys.exit(22)
-    # layers, cities, xsize, ysize = get_test_data()
-    layers, cities, xsize, ysize = get_big_random_data(args)
+    if args.file is None:
+        # layers, cities, xsize, ysize = get_test_data()
+        layers, cities, xsize, ysize = get_big_random_data(args)
+    else:
+        cities = read_cities(args.cities)
+        layers, xsize, ysize = get_file_data(args.file)
     show_layers(layers)
     board = Board(xsize, ysize, cities,layers)
     # place cities
