@@ -8,10 +8,10 @@ import sys
 
 slimit = 15
 
-steps_per_layer = 4
+steps_per_layer = 30  # step every 2 mins
 
 EXPECTEDHDR = "xid,yid,date_id,hour,wind\n"
-message_count = 10000  # every message_count iterations, output a message
+message_count = 1000000  # every message_count iterations, output a message
 
 
 class Cell(object):
@@ -67,7 +67,7 @@ class Board(object):
         self.pass_store = [[self.start]]  # record initial pos
         self.xsize = xsize
         self.ysize = ysize
-        self.cells = [[Cell(Board.CLEAR) for x in range(xsize)] for y in range(ysize)]
+        self.cells = [[Cell(Board.CLEAR) for y in range(ysize)] for x in range(xsize)]
         logging.warning("Start is {}".format(self.start))
         logging.warning("Finish is {}".format(self.finish))
         self.cells[self.start[0]][self.start[1]].set_value(Board.START)
@@ -89,7 +89,7 @@ class Board(object):
         Take a step from x, y using current marker
         """
         live = self.pass_store[-1]  # get edges
-        print(live)
+        logging.info(live)
         next_thing = []
         for x, y in live:
             try:
@@ -157,7 +157,7 @@ class Board(object):
             next_thing, found = self.take_step(step, layer)
             step += 1
             self.pass_store.append(next_thing)
-            print(self.pass_store)
+            logging.info(self.pass_store)
         return found
 
     def show_path(self, txy):
@@ -170,7 +170,6 @@ class Board(object):
         # OK - how did I get here?
         if target.get_parent() is not None:
             self.show_path(target.get_parent())
-        # print(target)
         logging.warning("Target {}, {} => {}".format(txy[0], txy[1], target))
 
 
@@ -254,7 +253,7 @@ def get_big_random_data(args):
     mean = args.wind_average
     dev = args.wind_sd
     nlayers = args.nlayers
-    layer_cells = [[[abs(int(random.gauss(mean, dev))) for x in range(xsize)] for y in range(ysize)] for l in range(nlayers)]
+    layer_cells = [[[abs(int(random.gauss(mean, dev))) for y in range(ysize)] for x in range(xsize)] for l in range(nlayers)]
     c0x = abs(int(random.gauss(xsize / 4, xsize / 4)))
     if c0x >= xsize:
         c0x = xsize - 1
@@ -333,7 +332,7 @@ def get_file_data(filename):
     xsize, ysize, minh, maxh = scan_file_for_dimensions(filename)
     nlayers = maxh - minh + 1
     date_value = -1  # defensive check to ensure we always read the same day
-    logging.info("xsize = {}, ysize = {}, nlayers = {}".format(xsize, ysize, nlayers))
+    logging.warning("xsize = {}, ysize = {}, nlayers = {}".format(xsize, ysize, nlayers))
     count = 0
     with open(filename, "r") as f:
         line = f.readline()
@@ -365,6 +364,7 @@ def get_file_data(filename):
 
 
 def main():
+    global steps_per_layer
     parser = argparse.ArgumentParser()
     parser.add_argument("-x", "--xsize", default=10, type=int, help="xsize of generated test data")
     parser.add_argument("-y", "--ysize", default=10, type=int, help="ysize of generated test data")
@@ -382,27 +382,30 @@ def main():
         raise ValueError("Invalid log level: {}".format(args.log))
     logging.basicConfig(level=nl,
                         format='%(message)s')
-    if args.xsize < 0 or \
-       args.ysize < 0 or \
-       args.nlayers < 0:
-        logging.critical("Malformed x, y or h values")
-        sys.exit(22)
     if args.file is None:
         # layers, cities, xsize, ysize = get_test_data()
-        layers, cities, xsize, ysize = get_big_random_data(args)
+        if args.xsize < 0 or \
+                args.ysize < 0 or \
+                args.nlayers < 0:
+            logging.critical("Malformed x, y or h values")
+            sys.exit(22)
+        layers, real_cities, xsize, ysize = get_big_random_data(args)
+        steps_per_layer = 4  # reduced value for testing
     else:
-        cities = read_cities(args.cities)
+        real_cities = read_cities(args.cities)
         layers, xsize, ysize = get_file_data(args.file)
     if args.file is None:  # if using a file, too much data typically to display
         show_layers(layers)
-    board = Board(xsize, ysize, cities, layers)
-    # place cities
-    res = board.solver()
-    if res is not None:
-        logging.warning("Found a solution = {}".format(res))
-        board.show_path(res)
-    else:
-        logging.warning("No solution found")
+    for tcity in real_cities[1:]:
+        cities = [real_cities[0], tcity]
+        logging.warning("Solving for city = {}".format(tcity))
+        board = Board(xsize, ysize, cities, layers)
+        res = board.solver()
+        if res is not None:
+            logging.warning("Found a solution = {}".format(res))
+            board.show_path(res)
+        else:
+            logging.warning("No solution found")
 
 
 if __name__ == '__main__':
