@@ -152,7 +152,7 @@ class Board(object):
                 for r in self.cells:
                     print(r)
                 print("########################################")
-                raise Exception("no solution")
+                return None
             layer = int(step / steps_per_layer)
             next_thing, found = self.take_step(step, layer)
             step += 1
@@ -165,12 +165,15 @@ class Board(object):
         Starting from found target, go back to start
         :return: 
         """
+        path = []
         target = self.cells[txy[0]][txy[1]]
         logging.info("      start of show_path. target {},{} => {}".format(txy[0], txy[1], target))
         # OK - how did I get here?
         if target.get_parent() is not None:
-            self.show_path(target.get_parent())
+            path += self.show_path(target.get_parent())
         logging.warning("Target {}, {} => {}".format(txy[0], txy[1], target))
+        path.append(txy)
+        return path
 
 
 def get_test_data():
@@ -375,6 +378,8 @@ def main():
                         help="Data file. Note this option supercedes the other options.")
     parser.add_argument("-c", "--cities", default="CityData.csv",
                         help="City data file. Note this option only works in conjunction with -f.")
+    parser.add_argument("-r", "--results", default="paths_found",
+                        help="root file name of a csv file per city with details of the paths found.")
     parser.add_argument("-l", "--log", default='WARNING', help="Logging level to use.")
     args = parser.parse_args()
     nl = getattr(logging, args.log.upper(), None)
@@ -396,16 +401,37 @@ def main():
         layers, xsize, ysize = get_file_data(args.file)
     if args.file is None:  # if using a file, too much data typically to display
         show_layers(layers)
+    per_city_results = {}
     for tcity in real_cities[1:]:
         cities = [real_cities[0], tcity]
         logging.warning("Solving for city = {}".format(tcity))
         board = Board(xsize, ysize, cities, layers)
         res = board.solver()
         if res is not None:
-            logging.warning("Found a solution = {}".format(res))
-            board.show_path(res)
+            per_city_results[tcity] = res
         else:
             logging.warning("No solution found")
+            per_city_results[tcity] = None
+    all_blobs = []
+    for k in per_city_results.keys():
+        res = per_city_results[k]
+        if res is None:
+            logging.warning("City at {},{} - no solution found :(".format(k[0], k[1]))
+        else:
+            logging.warning("City at {},{} has a solution!".format(k[0], k[1]))
+            path = board.show_path(res)
+            blob = {"City": k,
+                    "Path": path}
+            all_blobs.append(blob)
+    # TODO: This needs to also include the hour
+    for blob in all_blobs:
+        filename = "{}_{}_{}.csv".format(args.results, blob["City"][0], blob["City"][1])
+        with open(filename, "w") as f:
+            for pi in blob["Path"]:
+                line = "{},{}\n".format(pi[0], pi[1])
+                f.write(line)
+
+
 
 
 if __name__ == '__main__':
