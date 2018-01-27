@@ -13,6 +13,7 @@ MESSAGE_COUNT = 100000
 class Cell(object):
     """
     Hold the cell info
+    Methods sparse to improve performance
     """
     def __init__(self, x, y, t, parent, value):
         self.x = x
@@ -21,32 +22,11 @@ class Cell(object):
         self.parent = parent
         self.value = value
 
-    @staticmethod
-    def get_hash_key(x, y, t):
-        return "{}_{}_{}".format(x, y, t)
-
-    @staticmethod
-    def expand_hash_key(key):
-        return list(map(int, key.split('_')))
-
-    def get_my_key(self):
-        return Cell.get_hash_key(self.x, self.y, self.t)
-
-    def get_my_coords(self):
-        return self.x, self.y, self.t
-
     def get_parent(self):
         return self.parent
 
     def get_value(self):
         return self.value
-
-    def is_same_location(self, c):
-        cvals = c.get_my_coords()
-        if self.x == cvals[0] and\
-            self.y == cvals[1]:
-            return True
-        return False
 
 
 class SolverStore(object):
@@ -108,8 +88,8 @@ class SolverStore(object):
             # pop first value
             best = oldcs[0]
             for c in oldcs[1:]:
-                if best.is_same_location(c):
-                    if c.get_value() > best.get_value():
+                if best.x == c.x and best.y == c.y:
+                    if c.value > best.value:
                         best = c
                 else:
                     nextcs.append(c)
@@ -117,31 +97,30 @@ class SolverStore(object):
             oldcs = nextcs
         return newcs
 
-    def generate_children(self, current):
+    def generate_children(self, c):
         """
         Children = stay here or move 1 in up/down/left/right
         :param current: cell of interest
         :return: valid child cells
         """
-        cx, cy, ct = current.get_my_coords()
-        nt = ct + 1
+        nt = c.t + 1
         children = []
         for dx in [-1, 0, 1]:
             for dy in [-1, 0, 1]:
                 if abs(dx) == abs(dy):
                     continue  # no diags
-                nx = cx + dx
-                ny = cy + dy
+                nx = c.x + dx
+                ny = c.y + dy
                 if self.validate(nx, ny, nt):
-                    nv = self.calc_value(current.get_value(), self.layers[self.to_layer_index(nt)][nx][ny])
-                    children.append(Cell(nx, ny, nt, current, nv))
+                    nv = self.calc_value(c.value, self.layers[self.to_layer_index(nt)][nx][ny])
+                    children.append(Cell(nx, ny, nt, c, nv))
         # and stay in place for a step
-        if self.validate(cx, cy, nt):
+        if self.validate(c.x, c.y, nt):
             if nt % SolverStore.STEPS_PER_HOUR == 0:  # on a boundary
-                nv = self.calc_value(current.get_value(), self.layers[self.to_layer_index(nt)][cx][cy])
+                nv = self.calc_value(c.value, self.layers[self.to_layer_index(nt)][c.x][c.y])
             else:  # during an hour, the cell value does not change.
-                nv = current.get_value()
-            children.append(Cell(cx, cy, nt, current, nv))
+                nv = c.value
+            children.append(Cell(c.x, c.y, nt, c, nv))
         return children
 
     def take_step(self):
@@ -164,20 +143,19 @@ class SolverStore(object):
         :return: String with path data.
         """
         assert entry is not None, "Entry must not be None!"
-        coords = entry.get_my_coords()
         if entry.get_parent is None:  # no parent, so at start
-            return "{},{},{}\n".format(coords[0] + 1,
-                                       coords[1] + 1,
-                                       coords[2] + SolverStore.MIN_HOUR * SolverStore.STEPS_PER_HOUR)
+            return "{},{},{}\n".format(entry.x + 1,
+                                       entry.y + 1,
+                                       entry.t + SolverStore.MIN_HOUR * SolverStore.STEPS_PER_HOUR)
         else:
-            return "{},{},{}\n".format(coords[0] + 1,
-                                       coords[1] + 1,
-                                       coords[2] + SolverStore.MIN_HOUR * SolverStore.STEPS_PER_HOUR) +\
+            return "{},{},{}\n".format(entry.x + 1,
+                                       entry.y + 1,
+                                       entry.t + SolverStore.MIN_HOUR * SolverStore.STEPS_PER_HOUR) +\
                    self.report_path(entry.get_parent())
 
     def find_cell(self, x, y, t):
         for c in self.store:
-            if c.get_my_coords == (x, y, t):
+            if (c.x, c.y, c.t) == (x, y, t):
                 return c
         return None
 
@@ -267,15 +245,15 @@ def read_layers(args):
     logging.warning("Creating layer structure ...")
     layers = [[[0 for y in range(1, ysize + 1)] for x in range(1, xsize + 1)] for h in range(minh, maxh + 1)]
     logging.warning("Reading weather file data into layers...")
-    read_count = 0
     with open(args.weatherfile, "r") as f:
-        if read_count % MESSAGE_COUNT == 0:
-            print(read_count)
-        read_count += 1
         line = f.readline()
         assert line == WEATHERHEADER, "Unexpected header for weather data"
         line = f.readline()
+        read_count = 0
         while line != '':
+            if read_count % MESSAGE_COUNT == 0:
+                print(read_count)
+            read_count += 1
             xid_r, yid_r, date_id_r, hour_r, wind_r = line[:-1].split(',')
             xid, yid, hour, wind = int(xid_r) - 1, int(yid_r) - 1, int(hour_r) - SolverStore.MIN_HOUR, float(wind_r)
             layers[hour][xid][yid] = wind
