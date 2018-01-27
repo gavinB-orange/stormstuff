@@ -26,7 +26,7 @@ class Cell(object):
 
     @staticmethod
     def expand_hash_key(key):
-        return map(int, key.split('_'))
+        return list(map(int, key.split('_')))
 
     def get_my_key(self):
         return Cell.get_hash_key(self.x, self.y, self.t)
@@ -40,6 +40,14 @@ class Cell(object):
     def get_value(self):
         return self.value
 
+    def is_same_location(self, c):
+        cvals = c.get_my_coords()
+        if self.x == cvals[0] and\
+            self.y == cvals[1] and\
+            self.t == cvals[2]:
+            return True
+        return False
+
 
 class SolverStore(object):
     """
@@ -50,27 +58,31 @@ class SolverStore(object):
     MIN_HOUR = 3
     STEPS_PER_HOUR = 30
 
-    def __init__(self, cell, layers, xsize, ysize, wthing, step=90):
+    def __init__(self, cell, layers, xsize, ysize, wthing, furthestc, step=90):
         self.store = {}
         self.store[cell.get_my_key()] = cell
         self.xsize = xsize
         self.ysize = ysize
         self.wthing = wthing
+        self.furthestc = furthestc
         self.step = step
         self.layers = layers
 
     def validate(self, x, y, t):
-        if x < 0:
+        if x < 1:
             return False
         if x >= self.xsize:
             return False
-        if y < 0:
+        if y < 1:
             return False
         if y >= self.ysize:
             return False
         if t < (SolverStore.MIN_HOUR * SolverStore.STEPS_PER_HOUR):
             return False
         if t >= (SolverStore.MAX_HOUR * SolverStore.STEPS_PER_HOUR):
+            return False
+        dist = abs(self.furthestc[0] - x) + abs(self.furthestc[1] - y)
+        if dist > (SolverStore.MAX_HOUR - SolverStore.MIN_HOUR) * SolverStore.STEPS_PER_HOUR - t:
             return False
         return True
 
@@ -83,11 +95,30 @@ class SolverStore(object):
     def calc_value(self, current, wind):
         return current * (1 - self.wthing.get_prob(wind))
 
+    def meld(self, children):
+        """
+        The list of children includes duplicates - select the one
+        with the best marks
+        :param children: list of cells
+        :return: filtered list of cells
+        """
+        newcs = []
+        oldcs = children
+        while len(oldcs) > 0:
+            best = oldcs[0]  # first child is a candidate
+            oldcs = oldcs[1:]
+            for c in oldcs:
+                if best.is_same_location(c):
+                    if c.get_value() > best.get_value():
+                        best = c
+            newcs.append(best)
+        return newcs
+
     def generate_children(self, current):
         """
         Children = stay here or move 1 in up/down/left/right
-        :param current:
-        :return:
+        :param current: cell of interest
+        :return: valid child cells
         """
         cx, cy, ct = current.get_my_coords()
         nt = ct + 1
@@ -102,35 +133,49 @@ class SolverStore(object):
                     nv = self.calc_value(current.get_value(), self.layers[self.to_layer_index(nt)][nx][ny])
                     children.append(Cell(nx, ny, nt, current, nv))
         # and stay in place for a step
-        # TODO - this needs to change as only a change of hour causes staying in place to
-        # TODO - be re-evaluated.
         if self.validate(cx, cy, nt):
-            nv = self.calc_value(current.get_value(), self.layers[self.to_layer_index(nt)][cx][cy])
+            if nt % SolverStore.STEPS_PER_HOUR == 0:  # on a boundary
+                nv = self.calc_value(current.get_value(), self.layers[self.to_layer_index(nt)][cx][cy])
+            else:  # during an hour, the cell value does not change.
+                nv = current.get_value()
             children.append(Cell(cx, cy, nt, current, nv))
+        children = self.meld(children)
         return children
 
     def take_step(self):
         children = []
+        logging.warning("  store has {} entries".format(len(self.store)))
         for k in self.store.keys():
             current = self.store[k]
-            children.append(self.generate_children(current))
+            children += self.generate_children(current)
         for c in children:
-            self.store[c.cell.get_my_key()] = c
+            self.store[c.get_my_key()] = c
 
     def report_path(self, entry):
+        """
+        Output the resulting path.
+        Note the need to +1 the x and y values as they are reduced by 1 internally,
+        and adding 3 hours of steps to the time.
+        :param entry: Cell of interest
+        :return: String with path data.
+        """
         assert entry is not None, "Entry must not be None!"
         coords = entry.get_my_coords()
         if entry.get_parent is None:  # no parent, so at start
-            return "{},{},{}\n".format(coords[0], coords[1], coords[2])
+            return "{},{},{}\n".format(coords[0] + 1,
+                                       coords[1] + 1,
+                                       coords[2] + SolverStore.MIN_HOUR * SolverStore.STEPS_PER_HOUR)
         else:
-            return "{},{},{}\n".format(coords[0], coords[1], coords[2]) +\
+            return "{},{},{}\n".format(coords[0] + 1,
+                                       coords[1] + 1,
+                                       coords[2] + SolverStore.MIN_HOUR * SolverStore.STEPS_PER_HOUR) +\
                    self.report_path(entry.get_parent())
 
     def find_best_path(self, city):
         best = None
         bestconfidence = 0
         for t in range(SolverStore.MIN_HOUR * SolverStore.STEPS_PER_HOUR,
-                       SolverStore.MAX_HOUR * SolverStore.STEPS_PER_HOUR - 1):
+                       SolverStore.MAX_HOUR * SolverStore.STEPS_PER_HOUR):
             try:
                 thisone = self.store[Cell.get_hash_key(city[0], city[1], t)]
                 if thisone.get_value() > bestconfidence:
@@ -156,12 +201,13 @@ class Weighter(object):
 
     def __init__(self, args):
         self.values = None
-        with open(args.weightfile, "r") as f:
+        logging.warning("Reading probabilites ...")
+        with open(args.probfile, "r") as f:
             line = f.readline()
             # skip comments as weight file has a lot of extra stuff
             while line != '' and line[0] == '#':
                 line = f.readline()
-            self.values = map(float, line[:-1].split(','))
+            self.values = list(map(float, line[:-1].split(',')))
         assert len(list(self.values)) == Weighter.Nprobs, "Unexpected number of probabilities!"
         for v in self.values:
             assert v <= Weighter.MAX, "Bad value"
@@ -196,7 +242,7 @@ def scan_file_for_dimensions(fn):
             if yid > my:
                 my = yid
             if hid > maxh:
-                msxh = hid
+                maxh = hid
             if hid < minh:
                 minh = hid
             line = f.readline()
@@ -208,34 +254,51 @@ def read_layers(args):
     assert minh >= SolverStore.MIN_HOUR, "Unexpected early hour!"
     assert maxh < SolverStore.MAX_HOUR, "Unexpected late hour!"
     hsize = SolverStore.MAX_HOUR - SolverStore.MIN_HOUR
-    layers = [[[0 for y in range(ysize)] for x in range(xsize)] for h in range(hsize)]
+    logging.warning("Creating layer structure ...")
+    layers = [[[0 for y in range(1, ysize + 1)] for x in range(1, xsize + 1)] for h in range(minh, maxh + 1)]
+    logging.warning("Reading weather file data into layers...")
     with open(args.weatherfile, "r") as f:
         line = f.readline()
         assert line == WEATHERHEADER, "Unexpected header for weather data"
         line = f.readline()
         while line != '':
             xid_r, yid_r, date_id_r, hour_r, wind_r = line[:-1].split(',')
-            xid, yid, hour, wind = int(xid_r), int(yid_r), int(hour_r), float(wind_r)
+            xid, yid, hour, wind = int(xid_r) - 1, int(yid_r) - 1, int(hour_r) - SolverStore.MIN_HOUR, float(wind_r)
             layers[hour][xid][yid] = wind
             line = f.readline()
     return layers, xsize, ysize
 
 
 def read_cities(args):
-    cities = {}
+    tmp = {}
     with open(args.cities, "r") as f:
         line = f.readline()
         assert line == "cid,xid,yid\n", "Malformed city file"
         line = f.readline()
         while line != '':
-            cid, xid, yid = map(int, line[:-1].split(','))
-            cities[cid] = (xid, yid)
+            cid, xid, yid = list(map(int, line[:-1].split(',')))
+            tmp[cid] = (xid - 1, yid - 1)
             line = f.readline()
+    cities = []
+    for k in sorted(tmp.keys()):
+        cities.append(tmp[k])
+    assert tmp[0] == cities[0], "Something wrong reading cities"
     return cities
 
 
 def confidence(before, prob):
     return before * (1 - prob)
+
+
+def get_furthest_city(cities):
+    maxd = 0
+    fc = None
+    for c in cities[1:]:
+        dist = abs(c[0] - cities[0][0]) + abs(c[1] - cities[0][1])
+        if dist > maxd:
+            maxd = dist
+            fc = c
+    return c
 
 
 def main():
@@ -259,9 +322,13 @@ def main():
                   start_time,
                   None,
                   confidence(1, weighter.get_prob(layers[0][cities[0][0]][cities[0][1]])))
-    ss = SolverStore(london, layers, xsize, ysize, weighter)
+    furthest_city = get_furthest_city(cities)
+    ss = SolverStore(london, layers, xsize, ysize, weighter, furthest_city)
     # build up a complete set of ways of getting to everywhere
-    for step in range(start_time, SolverStore.MAX_HOUR * SolverStore.STEPS_PER_HOUR - 1):
+    step_count = 0
+    for step in range(start_time, SolverStore.MAX_HOUR * SolverStore.STEPS_PER_HOUR):
+        logging.warning("Step {}".format(step_count))
+        step_count += 1
         ss.take_step()
     # now see what the best path is to every city
     for city in cities[1:]:
