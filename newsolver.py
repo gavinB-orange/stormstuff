@@ -5,6 +5,7 @@
 import argparse
 import logging
 
+
 WEATHERHEADER = "xid,yid,date_id,hour,wind\n"
 MESSAGE_COUNT = 100000
 
@@ -43,8 +44,7 @@ class Cell(object):
     def is_same_location(self, c):
         cvals = c.get_my_coords()
         if self.x == cvals[0] and\
-            self.y == cvals[1] and\
-            self.t == cvals[2]:
+            self.y == cvals[1]:
             return True
         return False
 
@@ -59,8 +59,7 @@ class SolverStore(object):
     STEPS_PER_HOUR = 30
 
     def __init__(self, cell, layers, xsize, ysize, wthing, furthestc, step=90):
-        self.store = {}
-        self.store[cell.get_my_key()] = cell
+        self.store = [cell]
         self.xsize = xsize
         self.ysize = ysize
         self.wthing = wthing
@@ -105,13 +104,17 @@ class SolverStore(object):
         newcs = []
         oldcs = children
         while len(oldcs) > 0:
-            best = oldcs[0]  # first child is a candidate
-            oldcs = oldcs[1:]
-            for c in oldcs:
+            nextcs = []
+            # pop first value
+            best = oldcs[0]
+            for c in oldcs[1:]:
                 if best.is_same_location(c):
                     if c.get_value() > best.get_value():
                         best = c
+                else:
+                    nextcs.append(c)
             newcs.append(best)
+            oldcs = nextcs
         return newcs
 
     def generate_children(self, current):
@@ -125,7 +128,7 @@ class SolverStore(object):
         children = []
         for dx in [-1, 0, 1]:
             for dy in [-1, 0, 1]:
-                if dx == dy:
+                if abs(dx) == abs(dy):
                     continue  # no diags
                 nx = cx + dx
                 ny = cy + dy
@@ -139,17 +142,18 @@ class SolverStore(object):
             else:  # during an hour, the cell value does not change.
                 nv = current.get_value()
             children.append(Cell(cx, cy, nt, current, nv))
-        children = self.meld(children)
         return children
 
     def take_step(self):
         children = []
         logging.warning("  store has {} entries".format(len(self.store)))
-        for k in self.store.keys():
-            current = self.store[k]
+        for current in self.store:
             children += self.generate_children(current)
+        logging.warning("  {} children pre meld".format(len(children)))
+        children = self.meld(children)
+        logging.warning("  {} children post meld".format(len(children)))
         for c in children:
-            self.store[c.get_my_key()] = c
+            self.store.append(c)
 
     def report_path(self, entry):
         """
@@ -171,18 +175,24 @@ class SolverStore(object):
                                        coords[2] + SolverStore.MIN_HOUR * SolverStore.STEPS_PER_HOUR) +\
                    self.report_path(entry.get_parent())
 
+    def find_cell(self, x, y, t):
+        for c in self.store:
+            if c.get_my_coords == (x, y, t):
+                return c
+        return None
+
     def find_best_path(self, city):
         best = None
         bestconfidence = 0
         for t in range(SolverStore.MIN_HOUR * SolverStore.STEPS_PER_HOUR,
                        SolverStore.MAX_HOUR * SolverStore.STEPS_PER_HOUR):
-            try:
-                thisone = self.store[Cell.get_hash_key(city[0], city[1], t)]
+            thisone = self.find_cell(city[0], city[1], t)
+            if thisone is None:  # city wasn't found yet
+                continue
+            else:
                 if thisone.get_value() > bestconfidence:
                     bestconfidence = thisone.get_value()
                     best = thisone
-            except KeyError:
-                continue  # normal - a lot of early time, city not reached
         assert best is not None, "No path found no matter how ludicrous!"
         # OK - now walk back from here
         self.report_path(best)
@@ -257,7 +267,11 @@ def read_layers(args):
     logging.warning("Creating layer structure ...")
     layers = [[[0 for y in range(1, ysize + 1)] for x in range(1, xsize + 1)] for h in range(minh, maxh + 1)]
     logging.warning("Reading weather file data into layers...")
+    read_count = 0
     with open(args.weatherfile, "r") as f:
+        if read_count % MESSAGE_COUNT == 0:
+            print(read_count)
+        read_count += 1
         line = f.readline()
         assert line == WEATHERHEADER, "Unexpected header for weather data"
         line = f.readline()
