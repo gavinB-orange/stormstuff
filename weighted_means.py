@@ -198,6 +198,7 @@ class WeighingMachine(object):
         count = 0
         bucket_err_2 = [0 for n in range(Nbuckets)]  # zero'ed list
         bucket_count = [0 for n in range(Nbuckets)]
+        greater_15 = [0 for n in range(Nbuckets)]
         with open(self.args.combined, "r") as combined:
             with open(self.args.insitu, "r") as insitu :
                 cline = combined.readline()
@@ -224,6 +225,8 @@ class WeighingMachine(object):
                         bucket = Nbuckets - 1
                     bucket_err_2[bucket] += err * err
                     bucket_count[bucket] += 1
+                    if ival >= 15:
+                        greater_15[bucket] += 1
                     cline = combined.readline()
                     iline = insitu.readline()
         var_global = sum_err_2 / count
@@ -242,6 +245,13 @@ class WeighingMachine(object):
                 iline = "Bucket {}, var = {}, sd = {}\n".format(i, var_buckets[i], sd_buckets[i])
                 res.write(iline)
                 print(iline)
+            for i in range(Nbuckets):
+                iline = "Bucket {}, count > 15 = {}, total = {}, % = {}".format(i,
+                                                                                greater_15[i],
+                                                                                bucket_count[i],
+                                                                                100 * greater_15[i] / bucket_count[i])
+                res.write(iline)
+                print(iline)
 
 
 def main():
@@ -252,7 +262,7 @@ def main():
     parser.add_argument("-b", "--sdbucketfile", default='sd_bucket_file.csv',
                         help="File name for file containing the sd info per bucket per model.")
     parser.add_argument("-m", "--model_file", default='ForecastDataforTraining_201712.csv',
-                         help="File name for file containing the sd info per model.")
+                        help="File name for file containing the sd info per model.")
     parser.add_argument("-i", "--insitu", default='In_situMeasurementforTraining_201712.csv',
                         help="File name for file containing the insitu data.")
     parser.add_argument("-c", "--combined", default='combined.csv',
@@ -275,3 +285,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
