@@ -8,6 +8,7 @@ import logging
 WEATHERHEADER = "xid,yid,date_id,hour,wind\n"
 MESSAGE_COUNT = 100000
 
+
 class Cell(object):
     """
     Hold the cell info
@@ -49,7 +50,7 @@ class SolverStore(object):
     MIN_HOUR = 3
     STEPS_PER_HOUR = 30
 
-    def __init__(self, cell, layers, xsize, ysize, wthing, step = 90):
+    def __init__(self, cell, layers, xsize, ysize, wthing, step=90):
         self.store = {}
         self.store[cell.get_my_key()] = cell
         self.xsize = xsize
@@ -59,15 +60,22 @@ class SolverStore(object):
         self.layers = layers
 
     def validate(self, x, y, t):
-        if x < 0: return False
-        if x >= self.xsize: return False
-        if y < 0: return False
-        if y >= self.ysize: return False
-        if t < (SolverStore.MIN_HOUR * SolverStore.STEPS_PER_HOUR): return False
-        if t >= (SolverStore.MAX_HOUR * SolverStore.STEPS_PER_HOUR): return False
+        if x < 0:
+            return False
+        if x >= self.xsize:
+            return False
+        if y < 0:
+            return False
+        if y >= self.ysize:
+            return False
+        if t < (SolverStore.MIN_HOUR * SolverStore.STEPS_PER_HOUR):
+            return False
+        if t >= (SolverStore.MAX_HOUR * SolverStore.STEPS_PER_HOUR):
+            return False
         return True
 
-    def to_layer_index(self, t):
+    @staticmethod
+    def to_layer_index(t):
         li = int(t / SolverStore.STEPS_PER_HOUR) - SolverStore.MIN_HOUR
         assert li >= 0, "Bad calculation!"
         return li
@@ -94,6 +102,8 @@ class SolverStore(object):
                     nv = self.calc_value(current.get_value(), self.layers[self.to_layer_index(nt)][nx][ny])
                     children.append(Cell(nx, ny, nt, current, nv))
         # and stay in place for a step
+        # TODO - this needs to change as only a change of hour causes staying in place to
+        # TODO - be re-evaluated.
         if self.validate(cx, cy, nt):
             nv = self.calc_value(current.get_value(), self.layers[self.to_layer_index(nt)][cx][cy])
             children.append(Cell(cx, cy, nt, current, nv))
@@ -108,10 +118,12 @@ class SolverStore(object):
             self.store[c.cell.get_my_key()] = c
 
     def report_path(self, entry):
+        assert entry is not None, "Entry must not be None!"
+        coords = entry.get_my_coords()
         if entry.get_parent is None:  # no parent, so at start
-            return "{},{},{}\n".format(entry.get_my_coords())
+            return "{},{},{}\n".format(coords[0], coords[1], coords[2])
         else:
-            return "{},{},{}\n".format(entry.get_my_coords()) +\
+            return "{},{},{}\n".format(coords[0], coords[1], coords[2]) +\
                    self.report_path(entry.get_parent())
 
     def find_best_path(self, city):
@@ -146,6 +158,9 @@ class Weighter(object):
         self.values = None
         with open(args.weightfile, "r") as f:
             line = f.readline()
+            # skip comments as weight file has a lot of extra stuff
+            while line != '' and line[0] == '#':
+                line = f.readline()
             self.values = map(float, line[:-1].split(','))
         assert len(list(self.values)) == Weighter.Nprobs, "Unexpected number of probabilities!"
         for v in self.values:
