@@ -29,6 +29,8 @@ Nmodels = 10  # but they start at 1
 Nbuckets = 6
 BucketWidth = 5
 message_count = 10000  # every message_count iterations, output a message
+OutputBuckets = 60
+OutputBucketWidth = 0.5
 
 
 class CacherOne(object):
@@ -196,9 +198,9 @@ class WeighingMachine(object):
         # global and bucketized
         sum_err_2 = 0
         count = 0
-        bucket_err_2 = [0 for n in range(Nbuckets)]  # zero'ed list
-        bucket_count = [0 for n in range(Nbuckets)]
-        greater_15 = [0 for n in range(Nbuckets)]
+        bucket_err_2 = [0 for n in range(OutputBuckets)]  # zero'ed list
+        bucket_count = [0 for n in range(OutputBuckets)]
+        greater_15 = [0 for n in range(OutputBuckets)]
         with open(self.args.combined, "r") as combined:
             with open(self.args.insitu, "r") as insitu :
                 cline = combined.readline()
@@ -220,9 +222,9 @@ class WeighingMachine(object):
                     err = cval - ival
                     sum_err_2 += err * err
                     count += 1
-                    bucket = int(float(cwind) / BucketWidth)
-                    if bucket >= Nbuckets:
-                        bucket = Nbuckets - 1
+                    bucket = int(float(cwind) / OutputBucketWidth)
+                    if bucket >= OutputBuckets:
+                        bucket = OutputBuckets - 1
                     bucket_err_2[bucket] += err * err
                     bucket_count[bucket] += 1
                     if ival >= 15:
@@ -231,27 +233,36 @@ class WeighingMachine(object):
                     iline = insitu.readline()
         var_global = sum_err_2 / count
         sd_global = math.sqrt(var_global)
-        var_buckets = [0 for n in range(Nbuckets)]
-        sd_buckets = [0 for n in range(Nbuckets)]
-        for i in range(Nbuckets):
+        var_buckets = [0 for n in range(OutputBuckets)]
+        sd_buckets = [0 for n in range(OutputBuckets)]
+        for i in range(OutputBuckets):
             var_buckets[i] = bucket_err_2[i] / bucket_count[i]
             sd_buckets[i] = math.sqrt(var_buckets[i])
         logging.warning("Results written to {}".format(self.args.results))
         with open(self.args.results, "w") as res:
-            gline = "Global variance = {}, sd = {}\n".format(var_global, sd_global)
+            gline = "# Global variance = {}, sd = {}\n".format(var_global, sd_global)
             res.write(gline)
             print(gline)
-            for i in range(Nbuckets):
-                iline = "Bucket {}, var = {}, sd = {}\n".format(i, var_buckets[i], sd_buckets[i])
+            for i in range(OutputBuckets):
+                iline = "# Bucket {}, var = {}, sd = {}\n".format(i, var_buckets[i], sd_buckets[i])
                 res.write(iline)
                 print(iline)
-            for i in range(Nbuckets):
-                iline = "Bucket {}, count > 15 = {}, total = {}, % = {}".format(i,
-                                                                                greater_15[i],
-                                                                                bucket_count[i],
-                                                                                100 * greater_15[i] / bucket_count[i])
+            for i in range(OutputBuckets):
+                iline = "# Bucket {}, count > 15 = {}, total = {}, % = {}\n".format(i,
+                                                                                  greater_15[i],
+                                                                                  bucket_count[i],
+                                                                                  100 * greater_15[i] / bucket_count[i])
                 res.write(iline)
                 print(iline)
+            res.write("# This last line is a csv set of probs\n")
+            iline = ""
+            for i in range(OutputBuckets):
+                iline = iline + "{},".format(float(greater_15[i]) / bucket_count[i])
+            iline = iline[:-1]
+            iline += "\n"
+            res.write(iline)
+            print(iline)
+
 
 
 def main():
@@ -267,7 +278,7 @@ def main():
                         help="File name for file containing the insitu data.")
     parser.add_argument("-c", "--combined", default='combined.csv',
                         help="File name for file containing the new predicted data based on combining model info")
-    parser.add_argument("-r", "--results", default='results.txt',
+    parser.add_argument("-r", "--results", default='results.csv',
                         help="File name for file containing the SD of the new predicted data vs in-situ")
     parser.add_argument("-O", action="store_false", help="skip step 1")
 
