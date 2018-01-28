@@ -281,7 +281,7 @@ def main():
     parser.add_argument("-r", "--results", default='results.csv',
                         help="File name for file containing the SD of the new predicted data vs in-situ")
     parser.add_argument("-O", action="store_false", help="skip step 1")
-
+    parser.add_argument("-S", action="store_false", help="skip step 2")
     args = parser.parse_args()
     nl = getattr(logging, args.log.upper(), None)
     if not isinstance(nl, int):
@@ -291,7 +291,8 @@ def main():
     wm = WeighingMachine(args)
     if args.O:
         wm.get_first_wind_estimate()
-    wm.calc_sd()
+    if args.S:
+        wm.calc_sd()
 
 
 if __name__ == '__main__':
