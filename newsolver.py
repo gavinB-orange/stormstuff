@@ -7,7 +7,7 @@ import logging
 
 
 WEATHERHEADER = "xid,yid,date_id,hour,wind\n"
-MESSAGE_COUNT = 100000
+MESSAGE_COUNT = 400000
 
 
 class Cell(object):
@@ -37,12 +37,17 @@ class SolverStore(object):
     MAX_HOUR = 21
     MIN_HOUR = 3
     STEPS_PER_HOUR = 30
+    MIN_STEPS = MIN_HOUR * STEPS_PER_HOUR
+    MAX_STEPS = MAX_HOUR * STEPS_PER_HOUR
+    TOTAL_STEPS = (MAX_HOUR - MIN_HOUR) * STEPS_PER_HOUR
 
     def __init__(self, cell, layers, xsize, ysize, wthing, furthestc, step=90):
         # store is a list of list of list so can do [x][y][t]
         # this is different from the layer structure which is [t][x][y]
-        self.hsize = (SolverStore.MAX_HOUR - SolverStore.MIN_HOUR) * SolverStore.STEPS_PER_HOUR
+        self.hsize = SolverStore.TOTAL_STEPS
+        logging.warning("Initializing store ...")
         self.store = [[[None for h in range(self.hsize)] for y in range(ysize)] for x in range(xsize)]
+        logging.warning("  done.")
         self.store[cell.x][cell.y][cell.t] = cell
         self.xsize = xsize
         self.ysize = ysize
@@ -52,20 +57,14 @@ class SolverStore(object):
         self.layers = layers
 
     def validate(self, x, y, t):
-        if x < 1:
-            return False
-        if x >= self.xsize:
-            return False
-        if y < 1:
-            return False
-        if y >= self.ysize:
-            return False
-        if t < (SolverStore.MIN_HOUR * SolverStore.STEPS_PER_HOUR):
-            return False
-        if t >= (SolverStore.MAX_HOUR * SolverStore.STEPS_PER_HOUR):
-            return False
         dist = abs(self.furthestc[0] - x) + abs(self.furthestc[1] - y)
-        if dist > (SolverStore.MAX_HOUR - SolverStore.MIN_HOUR) * SolverStore.STEPS_PER_HOUR - t:
+        if dist > SolverStore.TOTAL_STEPS - t:
+            return False
+        if x < 0 or x >= self.xsize:
+            return False
+        if y < 0 or y >= self.ysize:
+            return False
+        if t < SolverStore.MIN_STEPS or t >= SolverStore.MAX_STEPS:
             return False
         return True
 
@@ -99,18 +98,42 @@ class SolverStore(object):
                 ny = c.y + dy
                 if self.validate(nx, ny, nt):
                     nv = self.calc_value(c.value, self.layers[self.to_layer_index(nt)][nx][ny])
-                    self.merge_child(Cell(nx, ny, nt, c, nv))
+                    peer = self.store[nx][ny][nt]
+                    if peer is None or nv > peer.value:
+                        self.store[nx][ny][nt] = Cell(nx, ny, nt, c, nv)
         # and stay in place for a step
         if self.validate(c.x, c.y, nt):
             if nt % SolverStore.STEPS_PER_HOUR == 0:  # on a boundary
                 nv = self.calc_value(c.value, self.layers[self.to_layer_index(nt)][c.x][c.y])
             else:  # during an hour, the cell value does not change.
                 nv = c.value
-            self.merge_child(Cell(c.x, c.y, nt, c, nv))
+            peer = self.store[c.x][c.y][nt]
+            if peer is None or nv > peer.value:
+                self.store[c.x][c.y][nt] = Cell(c.x, c.y, nt, c, nv)
 
-    def take_step(self):
-        for x in range(self.xsize):
-            for y in range(self.ysize):
+    def take_step(self, city, step):
+        diff = city.x - step
+        if diff < 0:
+            sx = 0
+        else:
+            sx = diff
+        diff = city.x + step
+        if diff > self.xsize:
+            ex = self.xsize
+        else:
+            ex = diff
+        diff = city.y - step
+        if diff < 0:
+            sy = 0
+        else:
+            sy = diff
+        diff = city.y + step
+        if diff > self.ysize:
+            ey = self.ysize
+        else:
+            ey = diff
+        for x in range(sx, ex):
+            for y in range(sy, ey):
                 for h in range(self.hsize):
                     target = self.store[x][y][h]
                     if target is not None:
@@ -128,18 +151,18 @@ class SolverStore(object):
         if entry.get_parent is None:  # no parent, so at start
             return "{},{},{}\n".format(entry.x + 1,
                                        entry.y + 1,
-                                       entry.t + SolverStore.MIN_HOUR * SolverStore.STEPS_PER_HOUR)
+                                       entry.t + SolverStore.MIN_STEPS)
         else:
             return "{},{},{}\n".format(entry.x + 1,
                                        entry.y + 1,
-                                       entry.t + SolverStore.MIN_HOUR * SolverStore.STEPS_PER_HOUR) +\
+                                       entry.t + SolverStore.MIN_STEPS) +\
                    self.report_path(entry.get_parent())
 
     def find_best_path(self, city):
         best = None
         bestconfidence = 0
-        for t in range(SolverStore.MIN_HOUR * SolverStore.STEPS_PER_HOUR,
-                       SolverStore.MAX_HOUR * SolverStore.STEPS_PER_HOUR):
+        for t in range(SolverStore.MIN_STEPS,
+                       SolverStore.MAX_STEPS):
             thisone = self.store[city[0]][city[1]][t]
             if thisone is None:  # city wasn't found yet
                 continue
@@ -286,7 +309,7 @@ def main():
     layers, xsize, ysize = read_layers(args)
     cities = read_cities(args)
     weighter = Weighter(args)
-    start_time = SolverStore.MIN_HOUR * SolverStore.STEPS_PER_HOUR
+    start_time = SolverStore.MIN_STEPS
     london = Cell(cities[0][0], cities[0][1],
                   start_time,
                   None,
@@ -295,10 +318,10 @@ def main():
     ss = SolverStore(london, layers, xsize, ysize, weighter, furthest_city)
     # build up a complete set of ways of getting to everywhere
     step_count = 0
-    for step in range(start_time, SolverStore.MAX_HOUR * SolverStore.STEPS_PER_HOUR):
+    for step in range(start_time, SolverStore.MAX_STEPS):
         logging.warning("Step {}".format(step_count))
         step_count += 1
-        ss.take_step()
+        ss.take_step(london, step_count)
     # now see what the best path is to every city
     for city in cities[1:]:
         ss.find_best_path(city)
