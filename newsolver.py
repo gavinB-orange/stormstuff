@@ -39,7 +39,11 @@ class SolverStore(object):
     STEPS_PER_HOUR = 30
 
     def __init__(self, cell, layers, xsize, ysize, wthing, furthestc, step=90):
-        self.store = [cell]
+        # store is a list of list of list so can do [x][y][t]
+        # this is different from the layer structure which is [t][x][y]
+        self.hsize = (SolverStore.MAX_HOUR - SolverStore.MIN_HOUR) * SolverStore.STEPS_PER_HOUR
+        self.store = [[[None for h in range(self.hsize)] for y in range(ysize)] for x in range(xsize)]
+        self.store[cell.x][cell.y][cell.t] = cell
         self.xsize = xsize
         self.ysize = ysize
         self.wthing = wthing
@@ -74,37 +78,19 @@ class SolverStore(object):
     def calc_value(self, current, wind):
         return current * (1 - self.wthing.get_prob(wind))
 
-    def meld(self, children):
-        """
-        The list of children includes duplicates - select the one
-        with the best marks
-        :param children: list of cells
-        :return: filtered list of cells
-        """
-        newcs = []
-        oldcs = children
-        while len(oldcs) > 0:
-            nextcs = []
-            # pop first value
-            best = oldcs[0]
-            for c in oldcs[1:]:
-                if best.x == c.x and best.y == c.y:
-                    if c.value > best.value:
-                        best = c
-                else:
-                    nextcs.append(c)
-            newcs.append(best)
-            oldcs = nextcs
-        return newcs
+    def merge_child(self, cell):
+        # check the cell against all others with the same x,y,t - only the best survives.
+        peer = self.store[cell.x][cell.y][cell.t]
+        if peer is None or cell.value > peer.value:
+            self.store[cell.x][cell.y][cell.t] = cell
 
     def generate_children(self, c):
         """
         Children = stay here or move 1 in up/down/left/right
-        :param current: cell of interest
+        Merge into store
         :return: valid child cells
         """
         nt = c.t + 1
-        children = []
         for dx in [-1, 0, 1]:
             for dy in [-1, 0, 1]:
                 if abs(dx) == abs(dy):
@@ -113,26 +99,22 @@ class SolverStore(object):
                 ny = c.y + dy
                 if self.validate(nx, ny, nt):
                     nv = self.calc_value(c.value, self.layers[self.to_layer_index(nt)][nx][ny])
-                    children.append(Cell(nx, ny, nt, c, nv))
+                    self.merge_child(Cell(nx, ny, nt, c, nv))
         # and stay in place for a step
         if self.validate(c.x, c.y, nt):
             if nt % SolverStore.STEPS_PER_HOUR == 0:  # on a boundary
                 nv = self.calc_value(c.value, self.layers[self.to_layer_index(nt)][c.x][c.y])
             else:  # during an hour, the cell value does not change.
                 nv = c.value
-            children.append(Cell(c.x, c.y, nt, c, nv))
-        return children
+            self.merge_child(Cell(c.x, c.y, nt, c, nv))
 
     def take_step(self):
-        children = []
-        logging.warning("  store has {} entries".format(len(self.store)))
-        for current in self.store:
-            children += self.generate_children(current)
-        logging.warning("  {} children pre meld".format(len(children)))
-        children = self.meld(children)
-        logging.warning("  {} children post meld".format(len(children)))
-        for c in children:
-            self.store.append(c)
+        for x in range(self.xsize):
+            for y in range(self.ysize):
+                for h in range(self.hsize):
+                    target = self.store[x][y][h]
+                    if target is not None:
+                        self.generate_children(target)
 
     def report_path(self, entry):
         """
@@ -153,23 +135,17 @@ class SolverStore(object):
                                        entry.t + SolverStore.MIN_HOUR * SolverStore.STEPS_PER_HOUR) +\
                    self.report_path(entry.get_parent())
 
-    def find_cell(self, x, y, t):
-        for c in self.store:
-            if (c.x, c.y, c.t) == (x, y, t):
-                return c
-        return None
-
     def find_best_path(self, city):
         best = None
         bestconfidence = 0
         for t in range(SolverStore.MIN_HOUR * SolverStore.STEPS_PER_HOUR,
                        SolverStore.MAX_HOUR * SolverStore.STEPS_PER_HOUR):
-            thisone = self.find_cell(city[0], city[1], t)
+            thisone = self.store[city[0]][city[1]][t]
             if thisone is None:  # city wasn't found yet
                 continue
             else:
-                if thisone.get_value() > bestconfidence:
-                    bestconfidence = thisone.get_value()
+                if thisone.value > bestconfidence:
+                    bestconfidence = thisone.value
                     best = thisone
         assert best is not None, "No path found no matter how ludicrous!"
         # OK - now walk back from here
@@ -199,6 +175,7 @@ class Weighter(object):
         assert len(list(self.values)) == Weighter.Nprobs, "Unexpected number of probabilities!"
         for v in self.values:
             assert v <= Weighter.MAX, "Bad value"
+        logging.warning("  done.")
 
     def get_prob(self, wind):
         index = int(wind / Weighter.BucketWidth)
@@ -269,7 +246,7 @@ def read_cities(args):
         line = f.readline()
         while line != '':
             cid, xid, yid = list(map(int, line[:-1].split(',')))
-            tmp[cid] = (xid - 1, yid - 1)
+            tmp[cid] = (xid - 1, yid - 1)  # shift by 1 due to 0 starting arrays
             line = f.readline()
     cities = []
     for k in sorted(tmp.keys()):
@@ -290,7 +267,7 @@ def get_furthest_city(cities):
         if dist > maxd:
             maxd = dist
             fc = c
-    return c
+    return fc
 
 
 def main():
@@ -305,7 +282,7 @@ def main():
     if not isinstance(nl, int):
         raise ValueError("Invalid log level: {}".format(args.log))
     logging.basicConfig(level=nl,
-                        format='%(message)s')
+                        format='%(asctime)s : %(message)s')
     layers, xsize, ysize = read_layers(args)
     cities = read_cities(args)
     weighter = Weighter(args)
