@@ -321,11 +321,6 @@ def main():
     for step in range(SolverStore.TOTAL_STEPS):
         logging.warning("Step {}".format(step))
         ss.take_step(london, step)
-    # backup store just in case.
-    logging.warning("Dumping store contents to file ...")
-    with open("complete_store.json", "w") as f:
-        json.dump(ss, f)
-    logging.warning("  done")
     # now see what the best path is to every city
     for city in cities[1:]:
         ss.find_best_path(city)
