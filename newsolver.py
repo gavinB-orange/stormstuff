@@ -318,7 +318,7 @@ def main():
     furthest_city = get_furthest_city(cities)
     ss = SolverStore(london, layers, xsize, ysize, weighter, furthest_city)
     # build up a complete set of ways of getting to everywhere
-    for step in range(SolverStore.MAX_STEPS):
+    for step in range(SolverStore.TOTAL_STEPS):
         logging.warning("Step {}".format(step))
         ss.take_step(london, step)
     # backup store just in case.
