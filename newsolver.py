@@ -140,7 +140,7 @@ class SolverStore(object):
                     if target is not None:
                         self.generate_children(target)
 
-    def report_path(self, entry):
+    def report_path(self, entry, city, dayid):
         """
         Output the resulting path.
         Note the need to +1 the x and y values as they are reduced by 1 internally,
@@ -150,20 +150,25 @@ class SolverStore(object):
         """
         assert entry is not None, "Entry must not be None!"
         if entry.get_parent is None:  # no parent, so at start
-            return "{},{},{}\n".format(entry.x + 1,
-                                       entry.y + 1,
-                                       entry.t + SolverStore.MIN_STEPS)
+            return "{},{},{}:{},{},{}\n".format(city,
+                                                dayid,
+                                                (entry.t / SolverStore.STEPS_PER_HOUR) + SolverStore.MIN_HOUR,
+                                                2 * (entry.t % SolverStore.STEPS_PER_HOUR),
+                                                entry.x + 1,
+                                                entry.y + 1)
         else:
-            return "{},{},{}\n".format(entry.x + 1,
-                                       entry.y + 1,
-                                       entry.t + SolverStore.MIN_STEPS) +\
+            return "{},{},{}\n".format(city,
+                                       dayid,
+                                       (entry.t / SolverStore.STEPS_PER_HOUR) + SolverStore.MIN_HOUR,
+                                       2 * (entry.t % SolverStore.STEPS_PER_HOUR),
+                                       entry.x + 1,
+                                       entry.y + 1) +\
                    self.report_path(entry.get_parent())
 
-    def find_best_path(self, city):
+    def find_best_path(self, city, dayid):
         best = None
         bestconfidence = 0
-        for t in range(SolverStore.MIN_STEPS,
-                       SolverStore.MAX_STEPS):
+        for t in range(SolverStore.TOTAL_STEPS):
             thisone = self.store[city[0]][city[1]][t]
             if thisone is None:  # city wasn't found yet
                 continue
@@ -173,7 +178,7 @@ class SolverStore(object):
                     best = thisone
         assert best is not None, "No path found no matter how ludicrous!"
         # OK - now walk back from here
-        self.report_path(best)
+        return self.report_path(best, city, dayid)
 
 
 class Weighter(object):
@@ -300,6 +305,7 @@ def main():
                         help="Weather prediction data in csv format")
     parser.add_argument("-c", "--cities", default="CityData.csv", help="City data in csv format")
     parser.add_argument("-p", "--probfile", default="ProbData.csv", help="Mapping of wind to prob >= 15")
+    parser.add_argument("-d", "--dayid", default=1, help="Which day is being processed. Used during output only")
     parser.add_argument("-l", "--log", default='WARNING', help="Logging level to use.")
     args = parser.parse_args()
     nl = getattr(logging, args.log.upper(), None)
@@ -322,8 +328,9 @@ def main():
         logging.warning("Step {}".format(step))
         ss.take_step(london, step)
     # now see what the best path is to every city
+    logging.warning("Finding paths ...")
     for city in cities[1:]:
-        ss.find_best_path(city)
+        path = ss.find_best_path(city, args.dayid)
 
 if __name__ == '__main__':
     main()
