@@ -309,7 +309,7 @@ def main():
     layers, xsize, ysize = read_layers(args)
     cities = read_cities(args)
     weighter = Weighter(args)
-    start_time = SolverStore.MIN_STEPS
+    start_time = 0  # just remember need to add MIN_STEPS on output
     london = Cell(cities[0][0], cities[0][1],
                   start_time,
                   None,
@@ -317,11 +317,9 @@ def main():
     furthest_city = get_furthest_city(cities)
     ss = SolverStore(london, layers, xsize, ysize, weighter, furthest_city)
     # build up a complete set of ways of getting to everywhere
-    step_count = 0
-    for step in range(start_time, SolverStore.MAX_STEPS):
-        logging.warning("Step {}".format(step_count))
-        step_count += 1
-        ss.take_step(london, step_count)
+    for step in range(SolverStore.MAX_STEPS):
+        logging.warning("Step {}".format(step))
+        ss.take_step(london, step)
     # now see what the best path is to every city
     for city in cities[1:]:
         ss.find_best_path(city)
