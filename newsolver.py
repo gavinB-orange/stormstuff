@@ -4,7 +4,6 @@
 
 import argparse
 import logging
-import numpy as np
 
 
 WEATHERHEADER = "xid,yid,date_id,hour,wind\n"
@@ -47,8 +46,7 @@ class SolverStore(object):
         # this is different from the layer structure which is [t][x][y]
         self.steps_size = SolverStore.TOTAL_STEPS
         logging.warning("Initializing store ...")
-        #self.store = [[[None for h in range(self.steps_size)] for y in range(ysize)] for x in range(xsize)]
-        self.store = np.zeros((self.xsize, self.ysize, self.steps_size))
+        self.store = [[[None for h in range(self.steps_size)] for y in range(ysize)] for x in range(xsize)]
         logging.warning("  done.")
         self.store[cell.x][cell.y][cell.t] = cell
         self.xsize = xsize
@@ -276,8 +274,7 @@ def read_layers(args):
     assert maxh < SolverStore.MAX_HOUR, "Unexpected late hour!"
     hsize = SolverStore.MAX_HOUR - SolverStore.MIN_HOUR
     logging.warning("Creating layer structure ...")
-    #layers = [[[0 for y in range(1, ysize + 1)] for x in range(1, xsize + 1)] for h in range(minh, maxh + 1)]
-    layers = np.zeros((maxh - minh, xsize, ysize))
+    layers = [[[0 for y in range(1, ysize + 1)] for x in range(1, xsize + 1)] for h in range(minh, maxh + 1)]
     logging.warning("Reading weather file data into layers...")
     with open(args.weatherfile, "r") as f:
         line = f.readline()
