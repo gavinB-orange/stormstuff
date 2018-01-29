@@ -4,6 +4,7 @@
 
 import argparse
 import logging
+import pdb
 
 
 WEATHERHEADER = "xid,yid,date_id,hour,wind\n"
@@ -24,9 +25,6 @@ class Cell(object):
 
     def get_parent(self):
         return self.parent
-
-    def get_value(self):
-        return self.value
 
 
 class SolverStore(object):
@@ -49,6 +47,7 @@ class SolverStore(object):
         self.store = [[[None for h in range(self.steps_size)] for y in range(ysize)] for x in range(xsize)]
         logging.warning("  done.")
         self.store[cell.x][cell.y][cell.t] = cell
+        assert self.store[cell.x][cell.y][cell.t] is not None
         self.xsize = xsize
         self.ysize = ysize
         self.wthing = wthing
@@ -64,13 +63,13 @@ class SolverStore(object):
             return False
         if y < 0 or y >= self.ysize:
             return False
-        if t < SolverStore.MIN_STEPS or t >= SolverStore.MAX_STEPS:
+        if t < 0 or t >= SolverStore.TOTAL_STEPS:
             return False
         return True
 
     @staticmethod
     def to_layer_index(t):
-        li = int(t / SolverStore.STEPS_PER_HOUR) - SolverStore.MIN_HOUR
+        li = 0 <= int(t / SolverStore.STEPS_PER_HOUR) <= (SolverStore.MAX_HOUR - SolverStore.MIN_HOUR)
         assert li >= 0, "Bad calculation!"
         return li
 
@@ -89,6 +88,7 @@ class SolverStore(object):
         Merge into store
         :return: valid child cells
         """
+        #pdb.set_trace()
         nt = c.t + 1
         for dx in [-1, 0, 1]:
             for dy in [-1, 0, 1]:
@@ -117,7 +117,7 @@ class SolverStore(object):
             sx = 0
         else:
             sx = diff
-        diff = city.x + step
+        diff = city.x + step + 1
         if diff > self.xsize:
             ex = self.xsize
         else:
@@ -127,7 +127,7 @@ class SolverStore(object):
             sy = 0
         else:
             sy = diff
-        diff = city.y + step
+        diff = city.y + step + 1
         if diff > self.ysize:
             ey = self.ysize
         else:
@@ -175,6 +175,8 @@ class SolverStore(object):
                 if thisone.value > bestconfidence:
                     bestconfidence = thisone.value
                     best = thisone
+        if best is None:
+            pdb.set_trace()
         assert best is not None, "No path found no matter how ludicrous!"
         # OK - now walk back from here
         return self.report_path(best, city, dayid)
