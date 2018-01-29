@@ -69,7 +69,7 @@ class SolverStore(object):
 
     @staticmethod
     def to_layer_index(t):
-        li = 0 <= int(t / SolverStore.STEPS_PER_HOUR) <= (SolverStore.MAX_HOUR - SolverStore.MIN_HOUR)
+        li = int(t / SolverStore.STEPS_PER_HOUR)
         assert li >= 0, "Bad calculation!"
         return li
 
@@ -164,7 +164,8 @@ class SolverStore(object):
                                        entry.y + 1) +\
                    self.report_path(entry.get_parent())
 
-    def find_best_path(self, city, dayid):
+    def find_best_path(self, cityid, cities, dayid):
+        city = cities[cityid]
         best = None
         bestconfidence = 0
         for t in range(SolverStore.TOTAL_STEPS):
@@ -179,7 +180,7 @@ class SolverStore(object):
             pdb.set_trace()
         assert best is not None, "No path found no matter how ludicrous!"
         # OK - now walk back from here
-        return self.report_path(best, city, dayid)
+        return self.report_path(best, cityid, dayid)
 
     def dump_debug_info(self):
         """
@@ -189,10 +190,10 @@ class SolverStore(object):
         logging.warning("Reporting debug info on store ...")
         h_none_count = [0 for h in range(self.steps_size)]
         vcounts = [[0 for x in range(self.xsize)] for h in range(self.steps_size)]
-        for h in range(self.steps_size):
-            for x in range(self.xsize):
-                for y in range(self.ysize):
-                    if self.store[h][x][y] is None:
+        for x in range(self.xsize):
+            for y in range(self.ysize):
+                for h in range(self.steps_size):
+                    if self.store[x][y][h] is None:
                         h_none_count[h] += 1
                     else:
                         vcounts[h][x] += self.store[h][x][y]
@@ -359,8 +360,10 @@ def main():
         ss.dump_debug_info()
     # now see what the best path is to every city
     logging.warning("Finding paths ...")
-    for city in cities[1:]:
-        path = ss.find_best_path(city, args.dayid)
+    path = None
+    for cityid in range(len(cities[1:])):
+        path = ss.find_best_path(cityid, cities, args.dayid)
+    print("{}".format(path))
 
 if __name__ == '__main__':
     main()
