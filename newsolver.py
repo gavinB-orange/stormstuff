@@ -3,8 +3,8 @@
 # Solve the storm problem using a different data structure
 
 import argparse
-import json
 import logging
+import numpy as np
 
 
 WEATHERHEADER = "xid,yid,date_id,hour,wind\n"
@@ -45,9 +45,10 @@ class SolverStore(object):
     def __init__(self, cell, layers, xsize, ysize, wthing, furthestc, step=90):
         # store is a list of list of list so can do [x][y][t]
         # this is different from the layer structure which is [t][x][y]
-        self.hsize = SolverStore.TOTAL_STEPS
+        self.steps_size = SolverStore.TOTAL_STEPS
         logging.warning("Initializing store ...")
-        self.store = [[[None for h in range(self.hsize)] for y in range(ysize)] for x in range(xsize)]
+        #self.store = [[[None for h in range(self.steps_size)] for y in range(ysize)] for x in range(xsize)]
+        self.store = np.zeros((self.xsize, self.ysize, self.steps_size))
         logging.warning("  done.")
         self.store[cell.x][cell.y][cell.t] = cell
         self.xsize = xsize
@@ -135,7 +136,7 @@ class SolverStore(object):
             ey = diff
         for x in range(sx, ex):
             for y in range(sy, ey):
-                for h in range(self.hsize):
+                for h in range(self.steps_size):
                     target = self.store[x][y][h]
                     if target is not None:
                         self.generate_children(target)
@@ -179,6 +180,32 @@ class SolverStore(object):
         assert best is not None, "No path found no matter how ludicrous!"
         # OK - now walk back from here
         return self.report_path(best, city, dayid)
+
+    def dump_debug_info(self):
+        """
+        Report various bits of info on the store.
+        :return:
+        """
+        logging.warning("Reporting debug info on store ...")
+        h_none_count = [0 for h in range(self.steps_size)]
+        vcounts = [[0 for x in range(self.xsize)] for h in range(self.steps_size)]
+        for h in range(self.steps_size):
+            for x in range(self.xsize):
+                for y in range(self.ysize):
+                    if self.store[h][x][y] is None:
+                        h_none_count[h] += 1
+                    else:
+                        vcounts[h][x] += self.store[h][x][y]
+        print("steps_size = {}, xsize = {}, ysize = {}".format(self.steps_size, self.xsize, self.ysize))
+        print("None per step = ")
+        for h in range(self.steps_size):
+            print("{} => {}".format(h, h_none_count[h]))
+        print("Sum of values per y column = ")
+        for h in range(self.steps_size):
+            for x in range(self.xsize):
+                print("{}:{} => {}".format(h, x, vcounts[h][x]))
+
+
 
 
 class Weighter(object):
@@ -249,7 +276,8 @@ def read_layers(args):
     assert maxh < SolverStore.MAX_HOUR, "Unexpected late hour!"
     hsize = SolverStore.MAX_HOUR - SolverStore.MIN_HOUR
     logging.warning("Creating layer structure ...")
-    layers = [[[0 for y in range(1, ysize + 1)] for x in range(1, xsize + 1)] for h in range(minh, maxh + 1)]
+    #layers = [[[0 for y in range(1, ysize + 1)] for x in range(1, xsize + 1)] for h in range(minh, maxh + 1)]
+    layers = np.zeros((maxh - minh, xsize, ysize))
     logging.warning("Reading weather file data into layers...")
     with open(args.weatherfile, "r") as f:
         line = f.readline()
@@ -306,6 +334,7 @@ def main():
     parser.add_argument("-c", "--cities", default="CityData.csv", help="City data in csv format")
     parser.add_argument("-p", "--probfile", default="ProbData.csv", help="Mapping of wind to prob >= 15")
     parser.add_argument("-d", "--dayid", default=1, help="Which day is being processed. Used during output only")
+    parser.add_argument("-D", "--debug", action="store_true", help="Debug mode - some extra output is provided.")
     parser.add_argument("-l", "--log", default='WARNING', help="Logging level to use.")
     args = parser.parse_args()
     nl = getattr(logging, args.log.upper(), None)
@@ -327,6 +356,8 @@ def main():
     for step in range(SolverStore.TOTAL_STEPS):
         logging.warning("Step {}".format(step))
         ss.take_step(london, step)
+    if args.debug:
+        ss.dump_debug_info()
     # now see what the best path is to every city
     logging.warning("Finding paths ...")
     for city in cities[1:]:
