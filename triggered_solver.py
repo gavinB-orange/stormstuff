@@ -130,9 +130,9 @@ class TriggerSolver(object):
         prev = self.get_right_one(prevlist, w)
         if prev is not None:  # stop here if something
             self.trace_back(prev.x, prev.y, w - 1, cid, did, fout)
-        line = ("{},{},{}:{},{},{}".format(cid, did, int(w / TriggerSolver.STEPS_PER_HOUR) + TriggerSolver.MIN_HOUR, 2 * (w % TriggerSolver.STEPS_PER_HOUR), x + 1, y + 1))
-        print(line)
-        fout.write(line + "\n")
+            line = ("{},{},{}:{},{},{}".format(cid, did, int(w / TriggerSolver.STEPS_PER_HOUR) + TriggerSolver.MIN_HOUR, 2 * (w % TriggerSolver.STEPS_PER_HOUR), x + 1, y + 1))
+            print(line)
+            fout.write(line + "\n")
 
     def find_best_path(self, cid, cities, dayid, fout):
         cityx, cityy = cities[cid][0], cities[cid][1]
