@@ -139,7 +139,7 @@ class SolverStore(object):
                     if target is not None:
                         self.generate_children(target)
 
-    def report_path(self, entry, city, dayid):
+    def report_path(self, entry, cityid, dayid):
         """
         Output the resulting path.
         Note the need to +1 the x and y values as they are reduced by 1 internally,
@@ -149,20 +149,20 @@ class SolverStore(object):
         """
         assert entry is not None, "Entry must not be None!"
         if entry.get_parent is None:  # no parent, so at start
-            return "{},{},{}:{},{},{}\n".format(city,
+            return "{},{},{}:{},{},{}\n".format(cityid,
                                                 dayid,
                                                 (entry.t / SolverStore.STEPS_PER_HOUR) + SolverStore.MIN_HOUR,
                                                 2 * (entry.t % SolverStore.STEPS_PER_HOUR),
                                                 entry.x + 1,
                                                 entry.y + 1)
         else:
-            return "{},{},{}\n".format(city,
+            return "{},{},{}\n".format(cityid,
                                        dayid,
                                        (entry.t / SolverStore.STEPS_PER_HOUR) + SolverStore.MIN_HOUR,
                                        2 * (entry.t % SolverStore.STEPS_PER_HOUR),
                                        entry.x + 1,
                                        entry.y + 1) +\
-                   self.report_path(entry.get_parent())
+                   self.report_path(entry.get_parent(), cityid, dayid)
 
     def find_best_path(self, cityid, cities, dayid):
         city = cities[cityid]
