@@ -128,7 +128,7 @@ class TriggerSolver(object):
     def trace_back(self, x, y, w, cid, did, fout):
         line = ("{},{},{}:{},{},{}".format(cid, did, int(w / TriggerSolver.STEPS_PER_HOUR), 2 * (w % TriggerSolver.STEPS_PER_HOUR), x, y))
         print(line)
-        f.write(line + "\n")
+        fout.write(line + "\n")
         prevlist = self.store[x][y].input_value_list
         prev = self.get_right_one(prevlist, w - 1)
         if prev is not None:  # stop here if something
