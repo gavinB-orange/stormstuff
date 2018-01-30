@@ -136,7 +136,10 @@ class TriggerSolver(object):
 
     def find_best_path(self, cid, cities, dayid, fout):
         cityx, cityy = cities[cid][0], cities[cid][1]
-        when = self.store[cityx][cityy].input_value_list[-1][1]
+        try:
+            when = self.store[cityx][cityy].input_value_list[-1][1]
+        except IndexError:
+            pdb.set_trace()
         self.trace_back(cityx, cityy, when, cid, dayid, fout)
 
 
@@ -298,3 +301,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
