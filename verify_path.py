@@ -17,14 +17,14 @@ INSITUHEADER = "xid,yid,date_id,hour,wind\n"
 BOOM = 15.0
 
 def read_insitu(args):
-    data = [[[[0 for h in range(MAX_H - MIN_H)] for d in DAYS] for y in range(MAX_Y)] for x in range(MAX_X)]
+    data = [[[[0 for h in range(MAX_H - MIN_H)] for d in range(DAYS)] for y in range(MAX_Y)] for x in range(MAX_X)]
     count = 0
     with open(args.insitu, "r") as insitu:
         iline = insitu.readline()
         assert iline == INSITUHEADER, "unexpected content in {}".format(args.insitu)
         iline = insitu.readline()
         while iline != '':
-            if count % MESSAGE_COUNT:
+            if count % MESSAGE_COUNT == 0:
                 print(count)
             count += 1
             ix_r, iy_r, idate_r, ihour_r, iwind_r = iline[:-1].split(',')
@@ -55,6 +55,7 @@ def walk_path(insitu, args):
     print("  OK steps = {}".format(ok_count))
     if len(bad_places) > 0:
         print("  FAILED - hit the following :")
+        print("  xid, yid, date, hour, wind")
         for bad in bad_places:
             print("  {}".format(bad))
     else:

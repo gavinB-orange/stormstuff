@@ -126,13 +126,13 @@ class TriggerSolver(object):
                 return pl[i][Cell.INP_WHO]
 
     def trace_back(self, x, y, w, cid, did, fout):
-        line = ("{},{},{}:{},{},{}".format(cid, did, int(w / TriggerSolver.STEPS_PER_HOUR), 2 * (w % TriggerSolver.STEPS_PER_HOUR), x, y))
-        print(line)
-        fout.write(line + "\n")
         prevlist = self.store[x][y].input_value_list
-        prev = self.get_right_one(prevlist, w - 1)
+        prev = self.get_right_one(prevlist, w)
         if prev is not None:  # stop here if something
             self.trace_back(prev.x, prev.y, w - 1, cid, did, fout)
+        line = ("{},{},{}:{},{},{}".format(cid, did, int(w / TriggerSolver.STEPS_PER_HOUR) + TriggerSolver.MIN_HOUR, 2 * (w % TriggerSolver.STEPS_PER_HOUR), x + 1, y + 1))
+        print(line)
+        fout.write(line + "\n")
 
     def find_best_path(self, cid, cities, dayid, fout):
         cityx, cityy = cities[cid][0], cities[cid][1]
@@ -292,7 +292,7 @@ def main():
     # completed the process - now extract a path
     logging.warning("Finding paths ...")
     with open(args.output, "w") as fout:
-        for cityid in range(1, len(cities[1:])):
+        for cityid in range(1, len(cities)):
             ts.find_best_path(cityid, cities, args.dayid, fout)
 
 
