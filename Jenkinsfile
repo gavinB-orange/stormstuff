@@ -8,9 +8,13 @@ pipeline {
     }
     stage('run_check') {
       steps {
-        sh '''pwd
+        sh '''virtualenv -p python3 venv
+./venv/bin/pip install -r requirements
+pwd
+cp ../*.csv .
 ls
-'''
+./venv/bin/python3 triggered_solver.py -w combined_per_day_1.csv -p results.csv -d 1 -o output_dat_1.csv
+./venv/bin/python3 verify_path.py -p output_dat_1.csv -i insitu_201712_per_day_1.csv'''
       }
     }
     stage('check_3') {
