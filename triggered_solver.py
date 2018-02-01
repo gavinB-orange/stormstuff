@@ -3,7 +3,10 @@
 
 import argparse
 import logging
+import os
 import pdb
+import tqdm
+
 
 WEATHERHEADER = "xid,yid,date_id,hour,wind\n"
 MESSAGE_COUNT = 400000
@@ -112,7 +115,7 @@ class TriggerSolver(object):
             self.poke_cell(me, me, now)
 
     def take_step(self, now):
-        logging.warning("Step {}".format(now))
+        #logging.warning("Step {}".format(now))
         for i in range(len(self.active)):
             current = self.active[i]
             self.poke_all_neighbours(current, now)
@@ -131,7 +134,7 @@ class TriggerSolver(object):
         if prev is not None:  # stop here if something
             self.trace_back(prev.x, prev.y, w - 1, cid, did, fout)
             line = ("{},{},{}:{},{},{}".format(cid, did, int(w / TriggerSolver.STEPS_PER_HOUR) + TriggerSolver.MIN_HOUR, 2 * (w % TriggerSolver.STEPS_PER_HOUR), x + 1, y + 1))
-            print(line)
+            #print(line)
             fout.write(line + "\n")
 
     def find_best_path(self, cid, cities, dayid, fout):
@@ -181,14 +184,15 @@ def scan_file_for_dimensions(fn):
     minh = 24  # hour cannot be beyond end of day
     count = 0
     logging.warning("Scanning input file for size information ...")
+    filesize = os.path.getsize(fn)
+    pbar = tqdm.tqdm(total=filesize)
     with open(fn, "r") as f:
         line = f.readline()
         assert line == WEATHERHEADER, "Malformed file - header does not match expectations"
+        pbar.update(len(line))
         line = f.readline()
+        pbar.update(len(line))
         while line != '':
-            if count % MESSAGE_COUNT == 0:
-                print(count)
-            count += 1
             # note dropping of final \n
             xid_r, yid_r, date_r, hour_r, wind_r = line[:-1].split(',')
             xid, yid, hid = int(xid_r), int(yid_r), int(hour_r)
@@ -201,30 +205,34 @@ def scan_file_for_dimensions(fn):
             if hid < minh:
                 minh = hid
             line = f.readline()
-        return mx, my, minh, maxh
+            pbar.update(len(line))
+        pbar.close()
+        return mx, my, minh, maxh, count
 
 def read_layers(args):
-    xsize, ysize, minh, maxh = scan_file_for_dimensions(args.weatherfile)
+    xsize, ysize, minh, maxh, nlines = scan_file_for_dimensions(args.weatherfile)
     assert minh >= TriggerSolver.MIN_HOUR, "Unexpected early hour!"
     assert maxh < TriggerSolver.MAX_HOUR, "Unexpected late hour!"
     hsize = TriggerSolver.MAX_HOUR - TriggerSolver.MIN_HOUR
     logging.warning("Creating layer structure ...")
     layers = [[[0 for y in range(1, ysize + 1)] for x in range(1, xsize + 1)] for h in range(minh, maxh + 1)]
     logging.warning("Reading weather file data into layers...")
+    filesize = os.path.getsize(args.weatherfile)
+    pbar = tqdm.tqdm(total=filesize)
     with open(args.weatherfile, "r") as f:
         line = f.readline()
         assert line == WEATHERHEADER, "Unexpected header for weather data"
+        pbar.update(len(line))
         line = f.readline()
-        read_count = 0
+        pbar.update(len(line))
         while line != '':
-            if read_count % MESSAGE_COUNT == 0:
-                print(read_count)
-            read_count += 1
             xid_r, yid_r, date_id_r, hour_r, wind_r = line[:-1].split(',')
             xid, yid, hour, wind = int(xid_r) - 1, int(yid_r) - 1, int(hour_r) - TriggerSolver.MIN_HOUR, float(
                 wind_r)
             layers[hour][xid][yid] = wind
             line = f.readline()
+            pbar.update(len(line))
+    pbar.close()
     return layers, xsize, ysize
 
 def read_cities(args):
@@ -285,18 +293,20 @@ def main():
     ts.active = ts.next
     ts.next = []
     # end of initial forcing
-    for now in range(1, TriggerSolver.TOTAL_STEPS):
-        size = len(ts.active)
-        if size == 1:
-            logging.warning("1 entry in the active list.")
-        else:
-            logging.warning("{} entries in the active list.".format(size))
+    logging.warning("Processing ...")
+    for now in tqdm.trange(1, TriggerSolver.TOTAL_STEPS):
+        # size = len(ts.active)
+        # if size == 1:
+        #     logging.warning("1 entry in the active list.")
+        # else:
+        #     logging.warning("{} entries in the active list.".format(size))
         ts.take_step(now)
     # completed the process - now extract a path
     logging.warning("Finding paths ...")
     with open(args.output, "w") as fout:
         for cityid in range(1, len(cities)):
             ts.find_best_path(cityid, cities, args.dayid, fout)
+    logging.warning("  Done!")
 
 
 if __name__ == '__main__':
