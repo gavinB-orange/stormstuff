@@ -14,7 +14,7 @@ echo "OK"'''
     }
     stage('email-status') {
       steps {
-        mail(subject: 'hi there', body: 'Hi there', from: 'eddie your shipboard computer', replyTo: 'gavin.brebner@hpe.com', to: 'gavin.brebner@hpe.com')
+        sh 'df -h'
       }
     }
   }
