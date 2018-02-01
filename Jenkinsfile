@@ -1,14 +1,14 @@
 pipeline {
   agent any
   stages {
-    stage('check_1') {
+    stage('checkout') {
       steps {
         git(url: 'https://github.com/gavinB-orange/stormstuff.git', branch: 'master')
       }
     }
-    stage('check_2') {
+    stage('run_check') {
       steps {
-        echo 'Hello world'
+        sh 'ls stormstuff'
       }
     }
     stage('check_3') {
