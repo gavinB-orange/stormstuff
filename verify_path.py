@@ -57,14 +57,17 @@ def walk_path(insitu, args):
                 ok_count += 1
             line = path.readline()
     print("Result :")
-    print("  OK steps = {}".format(ok_count))
     if len(bad_places) > 0:
         print("  FAILED - hit the following :")
         print("  xid, yid, date, hour, wind")
         for bad in bad_places:
             print("  {}".format(bad))
+        print("Score = 24h")
+        print("  Number of OK steps = {}".format(ok_count))
     else:
+        print("  OK steps = {}".format(ok_count))
         print("  And no storms hit. Congratulations.")
+        print("  Score = {}".format(ok_count * 2))
 
 
 def main():
