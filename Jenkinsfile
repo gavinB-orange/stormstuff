@@ -3,8 +3,7 @@ pipeline {
   stages {
     stage('check_1') {
       steps {
-        sh '''date
-echo "OK"'''
+        git(url: 'https://github.com/gavinB-orange/stormstuff.git', branch: 'master')
       }
     }
     stage('check_2') {
