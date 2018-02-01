@@ -8,7 +8,9 @@ pipeline {
     }
     stage('run_check') {
       steps {
-        sh 'ls stormstuff'
+        sh '''pwd
+ls
+'''
       }
     }
     stage('check_3') {
