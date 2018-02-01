@@ -12,6 +12,11 @@ echo "OK"'''
         echo 'Hello world'
       }
     }
+    stage('check_3') {
+      steps {
+        echo 'do something exciting'
+      }
+    }
     stage('email-status') {
       steps {
         sh 'df -h'
