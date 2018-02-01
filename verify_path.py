@@ -5,7 +5,9 @@
 
 import argparse
 import logging
+import os
 import pdb
+import tqdm
 
 
 MESSAGE_COUNT = 100000
@@ -19,15 +21,16 @@ BOOM = 15.0
 
 def read_insitu(args):
     data = [[[[0 for h in range(MAX_H - MIN_H)] for d in range(DAYS)] for y in range(MAX_Y)] for x in range(MAX_X)]
-    count = 0
+    size = os.path.getsize(args.insitu)
+    pbar = tqdm.tqdm(total=size)
+    logging.warning("Reading in-situ file ...")
     with open(args.insitu, "r") as insitu:
         iline = insitu.readline()
+        pbar.update(len(iline))
         assert iline == INSITUHEADER, "unexpected content in {}".format(args.insitu)
         iline = insitu.readline()
+        pbar.update(len(iline))
         while iline != '':
-            if count % MESSAGE_COUNT == 0:
-                print(count)
-            count += 1
             ix_r, iy_r, idate_r, ihour_r, iwind_r = iline[:-1].split(',')
             ix, iy, idate, ihour = int(ix_r) - 1, int(iy_r) - 1, int(idate_r), int(ihour_r) - MIN_H
             iwind = float(iwind_r)
@@ -36,14 +39,19 @@ def read_insitu(args):
             except IndexError:
                 pdb.set_trace()
             iline = insitu.readline()
+            pbar.update(len(iline))
     return data
 
 
 def walk_path(insitu, args):
     ok_count = 0
     bad_places = []
+    size = os.path.getsize(args.pathfile)
+    pbar = tqdm.tqdm(total=size)
+    logging.warning("Reading path file and verifying ...")
     with open(args.pathfile, "r") as path:
         line = path.readline()
+        pbar.update(len(line))
         while line != '':
             cid_r, date_id_r, ts_r, xid_r, yid_r = line[:-1].split(',')
             cid = int(cid_r)
@@ -56,6 +64,7 @@ def walk_path(insitu, args):
             else:
                 ok_count += 1
             line = path.readline()
+            pbar.update(len(line))
     print("Result :")
     if len(bad_places) > 0:
         print("  FAILED - hit the following :")
