@@ -8,8 +8,10 @@ pipeline {
     }
     stage('run_check') {
       steps {
-        sh '''
-pip install -r requirements
+        sh '''export http_proxy=http://web-proxy-hpe.houston.hpecorp.net:8080
+export https_proxy=http://web-proxy-hpe.houston.hpecorp.net:8080
+apk add --update python3
+python3 -m pip install -r requirements
 pwd
 cp ../*.csv .
 ls
