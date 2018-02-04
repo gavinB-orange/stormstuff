@@ -18,7 +18,7 @@ MIN_H = 3
 DAYS = 11 
 INSITUHEADER = "xid,yid,date_id,hour,wind\n"
 BOOM = 15.0
-H24 = 24 * 60 * 60
+H24 = 24 * 60
 
 
 def read_insitu(args):
