@@ -67,7 +67,6 @@ class Cell(object):
             return False
 
 
-
 class TriggerSolver(object):
 
     MAX_HOUR = 21
@@ -115,7 +114,7 @@ class TriggerSolver(object):
             self.poke_cell(me, me, now)
 
     def take_step(self, now):
-        #logging.warning("Step {}".format(now))
+        # logging.warning("Step {}".format(now))
         for i in range(len(self.active)):
             current = self.active[i]
             self.poke_all_neighbours(current, now)
@@ -123,21 +122,26 @@ class TriggerSolver(object):
         self.active = self.next
         self.next = []
 
-    def get_right_one(self, pl, t):
+    @staticmethod
+    def get_right_one(pl, t):
         for i in range(len(pl) - 1, -1, -1):
             if t >= pl[i][1]:  # choose this one
                 return pl[i][Cell.INP_WHO]
 
     def trace_back(self, x, y, w, cid, did, fout):
+        assert w is not None
         prevlist = self.store[x][y].input_value_list
-        prev = self.get_right_one(prevlist, w)
+        prev = TriggerSolver.get_right_one(prevlist, w)
         if prev is not None:  # stop here if something
             self.trace_back(prev.x, prev.y, w - 1, cid, did, fout)
-            line = ("{},{},{}:{},{},{}".format(cid, did, int(w / TriggerSolver.STEPS_PER_HOUR) + TriggerSolver.MIN_HOUR, 2 * (w % TriggerSolver.STEPS_PER_HOUR), x + 1, y + 1))
-            #print(line)
+            line = ("{},{},{}:{},{},{}".format(cid, did,
+                                               int(w / TriggerSolver.STEPS_PER_HOUR) + TriggerSolver.MIN_HOUR,
+                                               2 * (w % TriggerSolver.STEPS_PER_HOUR), x + 1, y + 1))
+            # print(line)
             fout.write(line + "\n")
 
     def find_best_path(self, cid, cities, dayid, fout):
+        when = None
         cityx, cityy = cities[cid][0], cities[cid][1]
         try:
             when = self.store[cityx][cityy].input_value_list[-1][1]
@@ -177,6 +181,7 @@ class Weighter(object):
             index = Weighter.Nprobs - 1
         return self.values[index]
 
+
 def scan_file_for_dimensions(fn):
     mx = 0
     my = 0
@@ -209,11 +214,11 @@ def scan_file_for_dimensions(fn):
         pbar.close()
         return mx, my, minh, maxh, count
 
+
 def read_layers(args):
     xsize, ysize, minh, maxh, nlines = scan_file_for_dimensions(args.weatherfile)
     assert minh >= TriggerSolver.MIN_HOUR, "Unexpected early hour!"
     assert maxh < TriggerSolver.MAX_HOUR, "Unexpected late hour!"
-    hsize = TriggerSolver.MAX_HOUR - TriggerSolver.MIN_HOUR
     logging.warning("Creating layer structure ...")
     layers = [[[0 for y in range(1, ysize + 1)] for x in range(1, xsize + 1)] for h in range(minh, maxh + 1)]
     logging.warning("Reading weather file data into layers...")
@@ -235,6 +240,7 @@ def read_layers(args):
     pbar.close()
     return layers, xsize, ysize
 
+
 def read_cities(args):
     tmp = {}
     with open(args.cities, "r") as f:
@@ -251,8 +257,10 @@ def read_cities(args):
     assert tmp[0] == cities[0], "Something wrong reading cities"
     return cities
 
+
 def confidence(before, prob):
     return before * (1 - prob)
+
 
 def get_furthest_city(cities):
     maxd = 0
@@ -273,7 +281,6 @@ def main():
     parser.add_argument("-p", "--probfile", default="ProbData.csv", help="Mapping of wind to prob >= 15")
     parser.add_argument("-o", "--output", default="paths_output.csv", help="Output path information")
     parser.add_argument("-d", "--dayid", default=1, help="Which day is being processed. Used during output only")
-    #parser.add_argument("-D", "--debug", action="store_true", help="Debug mode - some extra output is provided.")
     parser.add_argument("-l", "--log", default='WARNING', help="Logging level to use.")
     args = parser.parse_args()
     nl = getattr(logging, args.log.upper(), None)
@@ -311,4 +318,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
