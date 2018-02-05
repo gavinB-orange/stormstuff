@@ -39,7 +39,7 @@ cat gavin_verified_output
     stage('email-status') {
       steps {
         sh 'df -h'
-        mail(subject: 'Hi there', body: 'Hi there', from: 'gavin.brebner@hpe.com', replyTo: 'gavin.brebner@hpe.com', to: 'gavin.brebner@hpe.com')
+        mail(subject: 'Hi there', body: 'stormstuff / master run OK', from: 'gavin.brebner@hpe.com', replyTo: 'gavin.brebner@hpe.com', to: 'gavin.brebner@hpe.com')
       }
     }
   }
