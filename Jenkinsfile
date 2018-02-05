@@ -27,13 +27,12 @@ python3 triggered_solver.py -w combined_per_day_4.csv -p results.csv -d 4 -o out
 python3 verify_path.py -p output_day_4.csv -i insitu_201712_per_day_4.csv | tee -a gavin_verified_output
 python3 triggered_solver.py -w combined_per_day_5.csv -p results.csv -d 5 -o output_day_5.csv
 python3 verify_path.py -p output_day_5.csv -i insitu_201712_per_day_5.csv | tee -a gavin_verified_output
-cat gavin_verified_output | grep Total
 '''
       }
     }
     stage('check_3') {
       steps {
-        echo 'do something exciting'
+        sh 'grep Total gavin_verified_output'
       }
     }
     stage('email-status') {
