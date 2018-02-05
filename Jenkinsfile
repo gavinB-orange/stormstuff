@@ -11,7 +11,7 @@ pipeline {
         sh '''export http_proxy=http://web-proxy-hpe.houston.hpecorp.net:8080
 export https_proxy=http://web-proxy-hpe.houston.hpecorp.net:8080
 apk add --update python3
-python3 -m pip install -r requirements
+python3 -m pip install -r requirements.txt
 pwd
 cp ../*.csv .
 ls
